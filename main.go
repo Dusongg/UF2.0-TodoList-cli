@@ -3,6 +3,7 @@ package main
 import (
 	"OrderManager-cli/pb"
 	"context"
+	"errors"
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -10,39 +11,45 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/extrame/xls"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"image/color"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 )
 
 //2024.7.30
 //TODO: 1. 改用map存储，展示近五天  √
 //TODO: 2. 新增一行：添加任务 + 下一页   √
-//TODO: 3. 添加任务选项
+//TODO: 3. 添加任务选项    √
 //TODO: 4. 添加或者就该任务之后,对于本地以及其他用户的界面刷新数据问题
 //TODO: 5. 导入数据按钮    √
 //TODO: 6. 处理过期任务    √
-//TODO: 7. 给任务添加颜色
 
 //2024.7.31
-//TODO: 1. 批量导入数据
-//TODO: 2. 收件箱界面
+//TODO: 1. 批量导入数据	√
+//TODO: 2. 收件箱界面     %50
+//TODO: 3. 表单点击输入框将默认值写出来  √
+//TODO: 4. 登录 & 自动登录
+//TODO: 5. 删除操作   √
+
+//2024.8.1
+//TODO 1. 完成收件箱界面
+//TODO 2. 完成“today”姐买你
 
 const DAYSPERPAGE = 5
+
+var colorTheme1 = color.RGBA{R: 57, G: 72, B: 94, A: 255}
 
 func main() {
 
 	myapp := app.New()
 	mw := myapp.NewWindow("Task List for the Week")
 	//月光石主题:深-》浅
-	colorTheme1 := color.RGBA{57, 72, 94, 255}
 
 	// 建立一个链接，请求A服务
 	// 真实项目里肯定是通过配置中心拿服务名称，发给注册中心请求真实的A服务地址，这里都是模拟
@@ -53,7 +60,9 @@ func main() {
 	}
 	defer connect.Close()
 	client := pb.NewServiceClient(connect)
+
 	reply, err := client.GetTaskListAll(context.Background(), &pb.GetTaskListAllRequest{})
+
 	if err != nil {
 		log.Fatalf("could not get tasks: %v", err)
 	}
@@ -72,6 +81,14 @@ func main() {
 		//container.NewTabItem("库", widget.NewLabel("TODO")),
 	)
 	appTab.SetTabLocation(container.TabLocationLeading) //竖着的标签
+
+	var inboxGrid fyne.CanvasObject
+	appTab.OnSelected = func(item *container.TabItem) {
+		if item == appTab.Items[1] && inboxGrid == nil {
+			inboxGrid = CreateInBox(reply.Tasks)
+			appTab.Items[1].Content = inboxGrid
+		}
+	}
 
 	// 创建每天的任务列表
 	data := make(map[int][]*pb.Task)
@@ -99,19 +116,20 @@ func main() {
 	)
 
 	expiredList.OnSelected = func(id widget.ListItemID) {
-		fmt.Println(expired[id].Deadline)
-		succeed := updateForm(myapp, &expired[id], client)
-		fmt.Println(expired[id].Deadline)
+		succeed := ModForm(myapp, &expired[id], client)
 		fmt.Println(succeed)
-		if succeed {
+		if succeed == 0 { //update
 			updateItem := expired[id]
 			expired = append(expired[:id], expired[id+1:]...)
-			newdateid := addData(updateItem, &expired, data)
+			newDateId := addData(updateItem, &expired, data)
 			expiredList.Refresh()
-			if newdateid != -1 {
-				list[newdateid].Refresh()
+			if newDateId != -1 {
+				list[newDateId].Refresh()
 				appTab.Refresh()
 			}
+		} else if succeed == 1 { //delete
+			expired = append(expired[:id], expired[id+1:]...)
+			appTab.Refresh()
 		}
 
 	}
@@ -138,23 +156,19 @@ func main() {
 			},
 		)
 		list[d].OnSelected = func(id widget.ListItemID) {
-			succeed := updateForm(myapp, &data[d][id], client)
-			if succeed {
+			succeed := ModForm(myapp, &data[d][id], client)
+			if succeed == 0 { //update
 				updateItem := data[d][id]
 				data[d] = append(data[d][:id], data[d][id+1:]...)
 				addData(updateItem, &expired, data)
 				expiredList.Refresh()
 				list[d].Refresh()
 				appTab.Refresh()
+			} else if succeed == 1 { //delete
+				data[d] = append(data[d][:id], data[d][id+1:]...)
+				appTab.Refresh()
 			}
 		}
-
-		// TODO:添加
-		//addButton := widget.NewButton("Add Item", func() {
-		//	//TODO:添加
-		//	fmt.Println("TODO")
-		//	list[d].Refresh() // 刷新列表以显示新元素
-		//})
 
 		date := now.AddDate(0, 0, d)
 		//dateLabel := widget.NewLabel(date.Format("2006-01-02"))
@@ -173,28 +187,50 @@ func main() {
 		appTab.Refresh()
 	}
 
-	addBtn := widget.NewButtonWithIcon("添加任务", theme.ContentAddIcon(), func() {
-		addForm(myapp, client)
+	addBtn := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
+		newTask := addForm(myapp, client)
+		if newTask != nil {
+			addData(newTask, &expired, data)
+			appTab.Refresh()
+		}
 	})
-	importBtn := widget.NewButtonWithIcon("批量导入", theme.UploadIcon(), func() {
-		fileDialog := dialog.NewFileOpen(
-			func(reader fyne.URIReadCloser, err error) {
-				if err != nil {
-					dialog.ShowError(err, mw)
-					return
-				}
-				if reader == nil {
-					return
-				}
+	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
+		importWd := myapp.NewWindow("import")
+		input := widget.NewMultiLineEntry()
+		input.Resize(fyne.NewSize(600, 400))
 
-				// Do something with the selected file
-				fmt.Println("Selected file:", reader.URI().Path())
-				defer reader.Close()
-			}, mw)
-
-		// Set file dialog properties
-		fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".txt", ".md"})) // Filter by file extension
-		fileDialog.Show()
+		output := widget.NewMultiLineEntry()
+		output.Resize(fyne.NewSize(600, 400))
+		outputChan := make(chan string)
+		input.Validator = func(s string) error {
+			if s == "" {
+				return errors.New("can not be empty")
+			}
+			return nil
+		}
+		form := &widget.Form{
+			Items: []*widget.FormItem{
+				{Text: "input:", Widget: input},
+				{Text: "result", Widget: output},
+			},
+			OnSubmit: func() {
+				paths := strings.Split(input.Text, "\n")
+				for _, path := range paths {
+					go ImportXLSForTaskList(path, client, outputChan)
+				}
+				go func() {
+					for res := range outputChan {
+						output.Append(res + "\n\r")
+					}
+				}()
+			},
+			OnCancel: func() {
+				importWd.Close()
+			},
+		}
+		importWd.SetContent(form)
+		importWd.Resize(fyne.NewSize(600, 400))
+		importWd.Show()
 	})
 	prevPageBtn := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
 		viewPage = max(viewPage-1, 0)
@@ -218,22 +254,6 @@ func main() {
 	mw.Resize(fyne.NewSize(1000, 600))
 	mw.ShowAndRun()
 
-}
-
-func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
-	now := time.Now()
-	taskDate, err := time.Parse("2006-01-02", t.Deadline)
-	if err != nil {
-		log.Printf("could not parse date: %v", err)
-		return -1
-	}
-	weekday := int(taskDate.Sub(now).Hours() / 24) //任务时间距离现在有多少天
-	if weekday < 0 {
-		*expired = append(*expired, t)
-	} else {
-		data[weekday] = append(data[weekday], t)
-	}
-	return weekday
 }
 
 type task struct {
@@ -260,148 +280,84 @@ type patch struct {
 
 // 规范化导出文件的导入
 // 修改单信息： task_id,  principal,s tate,   升级说明： task_id, req_no,comment
-func importXLSForTaskList(xlsFile string, client pb.ServiceClient) {
-	// 打开.xls文件
-	workbook, err := xls.Open("./xlsFile/规范化导出文件.xls", "utf-8")
+
+func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
+	now := time.Now()
+	taskDate, err := time.Parse("2006-01-02", t.Deadline)
 	if err != nil {
-		log.Fatalf("无法打开文件: %v", err)
+		log.Printf("could not parse date: %v", err)
+		return -1
 	}
-
-	allInsert := make(map[string]*task)
-
-	// 读取“修改单信息”工作表中的数据
-	sheet := workbook.GetSheet(2)
-	if sheet == nil {
-		log.Fatalf("没有找到工作表：修改单信息")
+	weekday := int(taskDate.Sub(now.Truncate(24*time.Hour)).Hours() / 24) //任务时间距离现在有多少天
+	if weekday < 0 {
+		*expired = append(*expired, t)
+	} else {
+		data[weekday] = append(data[weekday], t)
 	}
-
-	// 读取B,C,D列的数据
-	for i := 2; i <= int(sheet.MaxRow); i++ {
-		row := sheet.Row(i)
-		colTaskID := row.Col(1)
-		colState := row.Col(2)
-		colPrincipal := row.Col(3)
-
-		allInsert[colTaskID] = &task{taskId: colTaskID, state: colState, principal: colPrincipal}
-	}
-
-	sheet = workbook.GetSheet(3)
-	if sheet == nil {
-		log.Fatalf("没有找到工作表：升级说明")
-	}
-
-	// 读取C,D,I列的数据
-	for i := 2; i <= int(sheet.MaxRow); i++ {
-		row := sheet.Row(i)
-		colTaskID2 := row.Col(2)
-		colComment := row.Col(3)
-		colReqNo := row.Col(8)
-
-		if task, ok := allInsert[colTaskID2]; ok {
-			task.comment = colComment
-			task.reqNo = colReqNo
-		}
-	}
-
-	req := pb.ImportToTaskListRequest{}
-	for _, t := range allInsert {
-		req.Tasks = append(req.Tasks, &pb.Task{TaskId: t.taskId, Comment: t.comment, EmergencyLevel: t.emergencyLevel,
-			Deadline: t.deadline, Principal: t.principal, ReqNo: t.reqNo,
-			EstimatedWorkHours: t.estimatedWorkHours, State: t.state, TypeId: t.typeId})
-	}
-
-	reply, err := client.ImportToTaskListTable(context.Background(), &req)
-	if err != nil {
-		fmt.Println(err)
-	}
-	log.Println("insert count: ", reply.InsertCnt)
-
+	return weekday
 }
 
-// TODO:front
-func importXLSForPatchTable(xlsFile string, client pb.ServiceClient) {
-	workbook, err := xls.Open(xlsFile, "utf-8")
-	if err != nil {
-		log.Fatalf("无法打开文件: %v", err)
-	}
-
-	sheet := workbook.GetSheet(0)
-	if sheet == nil {
-		log.Fatalf("没有找到工作表：修改单信息")
-	}
-	req := pb.ImportXLSToPatchRequest{}
-	for i := 2; i <= int(sheet.MaxRow); i++ {
-		row := sheet.Row(i)
-		//t, err := time.Parse("20060102", row.Col(14))
-		//if err != nil {
-		//	log.Println("err to parse time", err)
-		//}
-
-		req.Patchs = append(req.Patchs, &pb.Patch{ReqNo: row.Col(0), PatchNo: row.Col(1), Describe: row.Col(2),
-			ClientName: row.Col(3), Reason: row.Col(12),
-			Deadline: row.Col(14), Sponsor: row.Col(19)})
-	}
-
-	//TODO:调用rpc
-	_, err = client.ImportXLSToPatchTable(context.Background(), &req)
-	if err != nil {
-		log.Println(err)
-	}
-}
-
-func updateForm(myapp fyne.App, task **pb.Task, client pb.ServiceClient) bool {
+func ModForm(myapp fyne.App, task **pb.Task, client pb.ServiceClient) int {
 	modTaskWindow := myapp.NewWindow("Update")
 
-	txtDeadline, txtComment, txtState, txtPrincipal, txtEmergencyLevel32, txtEstimatedWorkHours64, txtType32 := (*task).Deadline, (*task).Comment, (*task).State, (*task).Principal, (*task).EmergencyLevel, (*task).EstimatedWorkHours, (*task).TypeId
-
-	isChanged := false
 	Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
-	Id.SetPlaceHolder((*task).TaskId)
-	ReqNo.SetPlaceHolder((*task).ReqNo)
-	Deadline.SetPlaceHolder(txtDeadline)
-	Deadline.OnSubmitted = func(in string) {
+	Id.SetText((*task).TaskId)
+	ReqNo.SetText((*task).ReqNo)
+	Deadline.SetText((*task).Deadline)
+	Deadline.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", Deadline.Text)
 		if err != nil {
-			dialog.NewInformation("提示", "deadline格式错误\nUsage: 2006-01-02", modTaskWindow).Show()
-			return
+			return errors.New("deadline format error  Usage: 2006-01-02")
 		}
-		txtDeadline = in
-		log.Printf("pre: %s, after : %s\n", txtDeadline, in)
-		isChanged = true
+		return nil
 	}
 
-	Comment.SetPlaceHolder(txtComment)
-	Comment.OnSubmitted = func(in string) {
-		txtComment = in
-		isChanged = true
+	Comment.SetText((*task).Comment)
+
+	EmergencyLevel.SetText(fmt.Sprintf("%d", (*task).EmergencyLevel))
+	emergencyLevel32 := (*task).EmergencyLevel
+	EmergencyLevel.Validator = func(in string) error {
+		if in == "" {
+			return errors.New("can not be empty")
+		}
+		num, _ := strconv.Atoi(in)
+		emergencyLevel32 = int32(num)
+		return nil
 	}
-	EmergencyLevel.SetPlaceHolder(fmt.Sprintf("%d", txtEmergencyLevel32))
-	EmergencyLevel.OnSubmitted = func(in string) {
+
+	EstimatedWorkHours.SetText(fmt.Sprintf("%d", (*task).EstimatedWorkHours))
+	estimatedWorkHours64 := (*task).EstimatedWorkHours
+	EstimatedWorkHours.Validator = func(in string) error {
+		if in == "" {
+			return errors.New("can not be empty")
+		}
 		tmp, _ := strconv.Atoi(in)
-		txtEmergencyLevel32 = int32(tmp)
-		isChanged = true
+		estimatedWorkHours64 = int64(tmp)
+		return nil
 	}
-	EstimatedWorkHours.SetPlaceHolder(fmt.Sprintf("%d", txtEstimatedWorkHours64))
-	EstimatedWorkHours.OnSubmitted = func(in string) {
+	State.SetText((*task).State)
+	State.Validator = func(in string) error {
+		if in == "" {
+			return errors.New("can not be empty")
+		}
+		return nil
+	}
+	Type.SetText(fmt.Sprintf("%d", (*task).TypeId))
+	typeid32 := (*task).TypeId
+	Type.Validator = func(in string) error {
+		if in == "" {
+			return errors.New("can not be empty")
+		}
 		tmp, _ := strconv.Atoi(in)
-		txtEstimatedWorkHours64 = int64(tmp)
-		isChanged = true
+		typeid32 = int32(tmp)
+		return nil
 	}
-	State.SetPlaceHolder(txtState)
-	State.OnSubmitted = func(in string) {
-		txtState = in
-		isChanged = true
-	}
-	Type.SetPlaceHolder(fmt.Sprintf("%d", txtType32))
-	Type.OnSubmitted = func(in string) {
-		tmp, _ := strconv.Atoi(in)
-		txtType32 = int32(tmp)
-		isChanged = true
-	}
-	Principal.SetPlaceHolder(txtPrincipal)
-	Principal.OnSubmitted = func(in string) {
-		txtPrincipal = in
-		isChanged = true
+	Principal.SetText((*task).Principal)
+	Principal.Validator = func(in string) error {
+		if in == "" {
+			return errors.New("can not be empty")
+		}
+		return nil
 	}
 
 	Id.Disable()    // 设置为只读
@@ -415,7 +371,30 @@ func updateForm(myapp fyne.App, task **pb.Task, client pb.ServiceClient) bool {
 	//Principal.Disable()          // 设置为只读
 
 	// Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal
-	isSucceed := make(chan bool)
+	isSucceed := make(chan int) //-1 : 失败， 0：update  1 ： delete
+
+	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
+		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
+			if confirm {
+				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: (*task).TaskId})
+				if err != nil {
+					log.Printf("error deleting task: %v", err)
+					dialog.ShowError(err, modTaskWindow)
+					isSucceed <- -1
+				} else {
+					isSucceed <- 1
+					modTaskWindow.Close()
+					return
+				}
+
+			} else {
+				return
+			}
+		}, modTaskWindow).Show()
+
+	})
+	delBtn.Importance = widget.HighImportance
+
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "任务单号", Widget: Id},
@@ -427,46 +406,36 @@ func updateForm(myapp fyne.App, task **pb.Task, client pb.ServiceClient) bool {
 			{Text: "任务描述", Widget: Comment},
 			{Text: "任务类型", Widget: Type},
 			{Text: "任务状态", Widget: State},
+			{Widget: delBtn},
 		},
-		OnSubmit: func() { // optional, handle form submission
-			//特判:deadline格式
-			//TODO:七个修改都为空，则不需要提交
+		OnSubmit: func() {
 
-			if isChanged {
-				newTask := &pb.Task{
-					TaskId:             (*task).TaskId,
-					Comment:            txtComment,
-					Deadline:           txtDeadline,
-					EmergencyLevel:     txtEmergencyLevel32,
-					EstimatedWorkHours: txtEstimatedWorkHours64,
-					State:              txtState,
-					TypeId:             txtType32,
-					ReqNo:              (*task).ReqNo,
-					Principal:          txtPrincipal,
-				}
-				*task = newTask
-				reply, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask})
-				if err != nil {
-					isSucceed <- false
-					log.Println(err)
-					return
-				}
-				if reply.Succeed {
-					isSucceed <- true
-					log.Println("update succeed")
-				} else {
-					isSucceed <- false
-				}
-			} else { //没有变化，省去不必要提交
-				isSucceed <- false
-				log.Println("nothing need to update")
+			newTask := &pb.Task{
+				TaskId:             (*task).TaskId,
+				Comment:            Comment.Text,
+				Deadline:           Deadline.Text,
+				EmergencyLevel:     emergencyLevel32,
+				EstimatedWorkHours: estimatedWorkHours64,
+				State:              State.Text,
+				TypeId:             typeid32,
+				ReqNo:              (*task).ReqNo,
+				Principal:          Principal.Text,
+			}
+			*task = newTask
+			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask})
+			if err != nil {
+				isSucceed <- -1
+				log.Println(err)
+				return
+			} else {
+				isSucceed <- 0
+				log.Println("update succeed")
 			}
 			modTaskWindow.Close()
-			fyne.LogError("User confirmed", nil)
 		},
 		OnCancel: func() {
-			isSucceed <- false
-			return
+			isSucceed <- -1
+			modTaskWindow.Close()
 		},
 	}
 
@@ -475,26 +444,45 @@ func updateForm(myapp fyne.App, task **pb.Task, client pb.ServiceClient) bool {
 	modTaskWindow.Show()
 
 	modTaskWindow.SetOnClosed(func() {
-		isSucceed <- false
+		isSucceed <- -1
 	})
 	return <-isSucceed
 }
 
-func addForm(myapp fyne.App, client pb.ServiceClient) bool {
-	modTaskWindow := myapp.NewWindow("Update")
+func addForm(myapp fyne.App, client pb.ServiceClient) *pb.Task {
+	addTaskWindow := myapp.NewWindow("Update")
 
 	idEty, deadlineEty, reqNoEty, commentEty, emergencyLevelEty, estimatedWorkHoursEty, stateEty, typeEty, principalEty := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
 
-	deadlineEty.OnSubmitted = func(in string) {
+	deadlineEty.SetText(time.Now().Format("2006-01-02"))
+	commentEty.SetText("null")
+	emergencyLevelEty.SetText("0")
+	estimatedWorkHoursEty.SetText("72")
+	stateEty.SetText("带启动")
+	typeEty.SetText("0")
+	principalEty.SetText("myself") //TODO: 默认登录者自己的名字，最后考虑权限的问题
+
+	deadlineEty.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", in)
 		if err != nil {
-			dialog.NewInformation("提示", "deadline格式错误\nUsage: 2006-01-02", modTaskWindow).Show()
-			return
+			return errors.New("deadline format error  Usage: 2006-01-02")
 		}
-		log.Printf("pre: %s, after : %s\n", deadlineEty.Text, in)
+		return nil
+	}
+	idEty.Validator = func(in string) error {
+		if idEty.Text == "" {
+			return errors.New("can not be empty")
+		}
+		return nil
+	}
+	reqNoEty.Validator = func(in string) error {
+		if reqNoEty.Text == "" {
+			return errors.New("can not be empty")
+		}
+		return nil
 	}
 
-	isSucceed := make(chan bool)
+	retChan := make(chan *pb.Task)
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "任务单号", Widget: idEty},
@@ -508,52 +496,46 @@ func addForm(myapp fyne.App, client pb.ServiceClient) bool {
 			{Text: "任务状态", Widget: stateEty},
 		},
 		OnSubmit: func() { // optional, handle form submission
+			numType, _ := strconv.Atoi(typeEty.Text)
+			taskType := int32(numType)
+			numHours, _ := strconv.Atoi(estimatedWorkHoursEty.Text)
+			estimatedWorkHours := int64(numHours)
+			numLevel, _ := strconv.Atoi(emergencyLevelEty.Text)
+			emergencyLevel := int32(numLevel)
 
-			if isChanged {
-				newTask := &pb.Task{
-					TaskId:             (*task).TaskId,
-					Comment:            txtComment,
-					Deadline:           txtDeadline,
-					EmergencyLevel:     txtEmergencyLevel32,
-					EstimatedWorkHours: txtEstimatedWorkHours64,
-					State:              txtState,
-					TypeId:             txtType32,
-					ReqNo:              (*task).ReqNo,
-					Principal:          txtPrincipal,
-				}
-				*task = newTask
-				reply, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask})
-				if err != nil {
-					isSucceed <- false
-					log.Println(err)
-					return
-				}
-				if reply.Succeed {
-					isSucceed <- true
-					log.Println("update succeed")
-				} else {
-					isSucceed <- false
-				}
-			} else { //没有变化，省去不必要提交
-				isSucceed <- false
-				log.Println("nothing need to update")
+			newTask := &pb.Task{
+				TaskId:             idEty.Text,
+				Comment:            commentEty.Text,
+				Deadline:           deadlineEty.Text,
+				EmergencyLevel:     emergencyLevel,
+				EstimatedWorkHours: estimatedWorkHours,
+				State:              stateEty.Text,
+				TypeId:             taskType,
+				ReqNo:              reqNoEty.Text,
+				Principal:          principalEty.Text,
 			}
-			modTaskWindow.Close()
-			fyne.LogError("User confirmed", nil)
+
+			_, err := client.AddTask(context.Background(), &pb.AddTaskRequest{T: newTask})
+			if err != nil {
+				dialog.NewInformation("error", err.Error(), addTaskWindow).Show()
+			} else {
+				retChan <- newTask
+				addTaskWindow.Close()
+			}
 		},
 		OnCancel: func() {
-			isSucceed <- false
-			return
+			retChan <- nil
+			addTaskWindow.Close()
 		},
 	}
 
-	modTaskWindow.SetContent(form)
-	modTaskWindow.Resize(fyne.NewSize(300, 200))
-	modTaskWindow.Show()
+	addTaskWindow.SetContent(form)
+	addTaskWindow.Resize(fyne.NewSize(300, 200))
+	addTaskWindow.Show()
 
-	modTaskWindow.SetOnClosed(func() {
-		isSucceed <- false
+	addTaskWindow.SetOnClosed(func() {
+		retChan <- nil
 	})
-	return <-isSucceed
-	return false
+	return <-retChan
+
 }

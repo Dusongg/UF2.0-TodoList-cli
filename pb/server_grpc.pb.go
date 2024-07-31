@@ -25,6 +25,7 @@ const (
 	Service_ImportToTaskListTable_FullMethodName = "/Service/ImportToTaskListTable"
 	Service_DelTask_FullMethodName               = "/Service/DelTask"
 	Service_ModTask_FullMethodName               = "/Service/ModTask"
+	Service_AddTask_FullMethodName               = "/Service/AddTask"
 	Service_GetPatchsAll_FullMethodName          = "/Service/GetPatchsAll"
 	Service_ModDeadLineInPatchs_FullMethodName   = "/Service/ModDeadLineInPatchs"
 	Service_DelPatch_FullMethodName              = "/Service/DelPatch"
@@ -42,9 +43,10 @@ type ServiceClient interface {
 	GetTaskListAll(ctx context.Context, in *GetTaskListAllRequest, opts ...grpc.CallOption) (*GetTaskListAllReply, error)
 	GetTaskListOne(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error)
 	ImportToTaskListTable(ctx context.Context, in *ImportToTaskListRequest, opts ...grpc.CallOption) (*ImportToTaskListReply, error)
-	// rpc AddTask (AddTaskRequest) returns (AddTaskReply);
+	// CURD
 	DelTask(ctx context.Context, in *DelTaskRequest, opts ...grpc.CallOption) (*DelTaskReply, error)
 	ModTask(ctx context.Context, in *ModTaskRequest, opts ...grpc.CallOption) (*ModTaskReply, error)
+	AddTask(ctx context.Context, in *AddTaskRequest, opts ...grpc.CallOption) (*AddTaskReply, error)
 	// 补丁
 	GetPatchsAll(ctx context.Context, in *GetPatchsAllRequest, opts ...grpc.CallOption) (*GetPatchsAllReply, error)
 	ModDeadLineInPatchs(ctx context.Context, in *MDLIPRequest, opts ...grpc.CallOption) (*MDLIPReply, error)
@@ -120,6 +122,16 @@ func (c *serviceClient) ModTask(ctx context.Context, in *ModTaskRequest, opts ..
 	return out, nil
 }
 
+func (c *serviceClient) AddTask(ctx context.Context, in *AddTaskRequest, opts ...grpc.CallOption) (*AddTaskReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddTaskReply)
+	err := c.cc.Invoke(ctx, Service_AddTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *serviceClient) GetPatchsAll(ctx context.Context, in *GetPatchsAllRequest, opts ...grpc.CallOption) (*GetPatchsAllReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPatchsAllReply)
@@ -171,9 +183,10 @@ type ServiceServer interface {
 	GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error)
 	GetTaskListOne(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error)
 	ImportToTaskListTable(context.Context, *ImportToTaskListRequest) (*ImportToTaskListReply, error)
-	// rpc AddTask (AddTaskRequest) returns (AddTaskReply);
+	// CURD
 	DelTask(context.Context, *DelTaskRequest) (*DelTaskReply, error)
 	ModTask(context.Context, *ModTaskRequest) (*ModTaskReply, error)
+	AddTask(context.Context, *AddTaskRequest) (*AddTaskReply, error)
 	// 补丁
 	GetPatchsAll(context.Context, *GetPatchsAllRequest) (*GetPatchsAllReply, error)
 	ModDeadLineInPatchs(context.Context, *MDLIPRequest) (*MDLIPReply, error)
@@ -203,6 +216,9 @@ func (UnimplementedServiceServer) DelTask(context.Context, *DelTaskRequest) (*De
 }
 func (UnimplementedServiceServer) ModTask(context.Context, *ModTaskRequest) (*ModTaskReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ModTask not implemented")
+}
+func (UnimplementedServiceServer) AddTask(context.Context, *AddTaskRequest) (*AddTaskReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddTask not implemented")
 }
 func (UnimplementedServiceServer) GetPatchsAll(context.Context, *GetPatchsAllRequest) (*GetPatchsAllReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPatchsAll not implemented")
@@ -337,6 +353,24 @@ func _Service_ModTask_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_AddTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).AddTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_AddTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).AddTask(ctx, req.(*AddTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Service_GetPatchsAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPatchsAllRequest)
 	if err := dec(in); err != nil {
@@ -439,6 +473,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ModTask",
 			Handler:    _Service_ModTask_Handler,
+		},
+		{
+			MethodName: "AddTask",
+			Handler:    _Service_AddTask_Handler,
 		},
 		{
 			MethodName: "GetPatchsAll",
