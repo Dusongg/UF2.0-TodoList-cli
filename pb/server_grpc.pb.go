@@ -26,10 +26,14 @@ const (
 	Service_DelTask_FullMethodName               = "/Service/DelTask"
 	Service_ModTask_FullMethodName               = "/Service/ModTask"
 	Service_AddTask_FullMethodName               = "/Service/AddTask"
+	Service_QueryTaskWithSQL_FullMethodName      = "/Service/QueryTaskWithSQL"
+	Service_QueryTaskWithField_FullMethodName    = "/Service/QueryTaskWithField"
 	Service_GetPatchsAll_FullMethodName          = "/Service/GetPatchsAll"
+	Service_GetOnePatchs_FullMethodName          = "/Service/GetOnePatchs"
 	Service_ModDeadLineInPatchs_FullMethodName   = "/Service/ModDeadLineInPatchs"
 	Service_DelPatch_FullMethodName              = "/Service/DelPatch"
 	Service_ImportXLSToPatchTable_FullMethodName = "/Service/ImportXLSToPatchTable"
+	Service_ModPatch_FullMethodName              = "/Service/ModPatch"
 )
 
 // ServiceClient is the client API for Service service.
@@ -47,11 +51,15 @@ type ServiceClient interface {
 	DelTask(ctx context.Context, in *DelTaskRequest, opts ...grpc.CallOption) (*DelTaskReply, error)
 	ModTask(ctx context.Context, in *ModTaskRequest, opts ...grpc.CallOption) (*ModTaskReply, error)
 	AddTask(ctx context.Context, in *AddTaskRequest, opts ...grpc.CallOption) (*AddTaskReply, error)
+	QueryTaskWithSQL(ctx context.Context, in *QueryTaskWithSQLRequest, opts ...grpc.CallOption) (*QueryTaskWithSQLReply, error)
+	QueryTaskWithField(ctx context.Context, in *QueryTaskWithFieldRequest, opts ...grpc.CallOption) (*QueryTaskWithFieldReply, error)
 	// 补丁
 	GetPatchsAll(ctx context.Context, in *GetPatchsAllRequest, opts ...grpc.CallOption) (*GetPatchsAllReply, error)
+	GetOnePatchs(ctx context.Context, in *GetOnePatchsRequest, opts ...grpc.CallOption) (*GetOnePatchsReply, error)
 	ModDeadLineInPatchs(ctx context.Context, in *MDLIPRequest, opts ...grpc.CallOption) (*MDLIPReply, error)
 	DelPatch(ctx context.Context, in *DelPatchRequest, opts ...grpc.CallOption) (*DelPatchReply, error)
 	ImportXLSToPatchTable(ctx context.Context, in *ImportXLSToPatchRequest, opts ...grpc.CallOption) (*ImportXLSToPatchReply, error)
+	ModPatch(ctx context.Context, in *ModPatchRequest, opts ...grpc.CallOption) (*ModPatchReply, error)
 }
 
 type serviceClient struct {
@@ -132,10 +140,40 @@ func (c *serviceClient) AddTask(ctx context.Context, in *AddTaskRequest, opts ..
 	return out, nil
 }
 
+func (c *serviceClient) QueryTaskWithSQL(ctx context.Context, in *QueryTaskWithSQLRequest, opts ...grpc.CallOption) (*QueryTaskWithSQLReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryTaskWithSQLReply)
+	err := c.cc.Invoke(ctx, Service_QueryTaskWithSQL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) QueryTaskWithField(ctx context.Context, in *QueryTaskWithFieldRequest, opts ...grpc.CallOption) (*QueryTaskWithFieldReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryTaskWithFieldReply)
+	err := c.cc.Invoke(ctx, Service_QueryTaskWithField_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *serviceClient) GetPatchsAll(ctx context.Context, in *GetPatchsAllRequest, opts ...grpc.CallOption) (*GetPatchsAllReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPatchsAllReply)
 	err := c.cc.Invoke(ctx, Service_GetPatchsAll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) GetOnePatchs(ctx context.Context, in *GetOnePatchsRequest, opts ...grpc.CallOption) (*GetOnePatchsReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOnePatchsReply)
+	err := c.cc.Invoke(ctx, Service_GetOnePatchs_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +210,16 @@ func (c *serviceClient) ImportXLSToPatchTable(ctx context.Context, in *ImportXLS
 	return out, nil
 }
 
+func (c *serviceClient) ModPatch(ctx context.Context, in *ModPatchRequest, opts ...grpc.CallOption) (*ModPatchReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ModPatchReply)
+	err := c.cc.Invoke(ctx, Service_ModPatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ServiceServer is the server API for Service service.
 // All implementations must embed UnimplementedServiceServer
 // for forward compatibility
@@ -187,11 +235,15 @@ type ServiceServer interface {
 	DelTask(context.Context, *DelTaskRequest) (*DelTaskReply, error)
 	ModTask(context.Context, *ModTaskRequest) (*ModTaskReply, error)
 	AddTask(context.Context, *AddTaskRequest) (*AddTaskReply, error)
+	QueryTaskWithSQL(context.Context, *QueryTaskWithSQLRequest) (*QueryTaskWithSQLReply, error)
+	QueryTaskWithField(context.Context, *QueryTaskWithFieldRequest) (*QueryTaskWithFieldReply, error)
 	// 补丁
 	GetPatchsAll(context.Context, *GetPatchsAllRequest) (*GetPatchsAllReply, error)
+	GetOnePatchs(context.Context, *GetOnePatchsRequest) (*GetOnePatchsReply, error)
 	ModDeadLineInPatchs(context.Context, *MDLIPRequest) (*MDLIPReply, error)
 	DelPatch(context.Context, *DelPatchRequest) (*DelPatchReply, error)
 	ImportXLSToPatchTable(context.Context, *ImportXLSToPatchRequest) (*ImportXLSToPatchReply, error)
+	ModPatch(context.Context, *ModPatchRequest) (*ModPatchReply, error)
 	mustEmbedUnimplementedServiceServer()
 }
 
@@ -220,8 +272,17 @@ func (UnimplementedServiceServer) ModTask(context.Context, *ModTaskRequest) (*Mo
 func (UnimplementedServiceServer) AddTask(context.Context, *AddTaskRequest) (*AddTaskReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddTask not implemented")
 }
+func (UnimplementedServiceServer) QueryTaskWithSQL(context.Context, *QueryTaskWithSQLRequest) (*QueryTaskWithSQLReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskWithSQL not implemented")
+}
+func (UnimplementedServiceServer) QueryTaskWithField(context.Context, *QueryTaskWithFieldRequest) (*QueryTaskWithFieldReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskWithField not implemented")
+}
 func (UnimplementedServiceServer) GetPatchsAll(context.Context, *GetPatchsAllRequest) (*GetPatchsAllReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPatchsAll not implemented")
+}
+func (UnimplementedServiceServer) GetOnePatchs(context.Context, *GetOnePatchsRequest) (*GetOnePatchsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetOnePatchs not implemented")
 }
 func (UnimplementedServiceServer) ModDeadLineInPatchs(context.Context, *MDLIPRequest) (*MDLIPReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ModDeadLineInPatchs not implemented")
@@ -231,6 +292,9 @@ func (UnimplementedServiceServer) DelPatch(context.Context, *DelPatchRequest) (*
 }
 func (UnimplementedServiceServer) ImportXLSToPatchTable(context.Context, *ImportXLSToPatchRequest) (*ImportXLSToPatchReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ImportXLSToPatchTable not implemented")
+}
+func (UnimplementedServiceServer) ModPatch(context.Context, *ModPatchRequest) (*ModPatchReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ModPatch not implemented")
 }
 func (UnimplementedServiceServer) mustEmbedUnimplementedServiceServer() {}
 
@@ -371,6 +435,42 @@ func _Service_AddTask_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_QueryTaskWithSQL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryTaskWithSQLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).QueryTaskWithSQL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_QueryTaskWithSQL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).QueryTaskWithSQL(ctx, req.(*QueryTaskWithSQLRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_QueryTaskWithField_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryTaskWithFieldRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).QueryTaskWithField(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_QueryTaskWithField_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).QueryTaskWithField(ctx, req.(*QueryTaskWithFieldRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Service_GetPatchsAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPatchsAllRequest)
 	if err := dec(in); err != nil {
@@ -385,6 +485,24 @@ func _Service_GetPatchsAll_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ServiceServer).GetPatchsAll(ctx, req.(*GetPatchsAllRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_GetOnePatchs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOnePatchsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).GetOnePatchs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_GetOnePatchs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).GetOnePatchs(ctx, req.(*GetOnePatchsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -443,6 +561,24 @@ func _Service_ImportXLSToPatchTable_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_ModPatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ModPatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).ModPatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_ModPatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).ModPatch(ctx, req.(*ModPatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Service_ServiceDesc is the grpc.ServiceDesc for Service service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -479,8 +615,20 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_AddTask_Handler,
 		},
 		{
+			MethodName: "QueryTaskWithSQL",
+			Handler:    _Service_QueryTaskWithSQL_Handler,
+		},
+		{
+			MethodName: "QueryTaskWithField",
+			Handler:    _Service_QueryTaskWithField_Handler,
+		},
+		{
 			MethodName: "GetPatchsAll",
 			Handler:    _Service_GetPatchsAll_Handler,
+		},
+		{
+			MethodName: "GetOnePatchs",
+			Handler:    _Service_GetOnePatchs_Handler,
 		},
 		{
 			MethodName: "ModDeadLineInPatchs",
@@ -493,6 +641,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportXLSToPatchTable",
 			Handler:    _Service_ImportXLSToPatchTable_Handler,
+		},
+		{
+			MethodName: "ModPatch",
+			Handler:    _Service_ModPatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
