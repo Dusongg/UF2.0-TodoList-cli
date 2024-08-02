@@ -1,6 +1,7 @@
 package main
 
 import (
+	"OrderManager-cli/common"
 	"OrderManager-cli/pb"
 	"context"
 	"errors"
@@ -14,8 +15,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"image/color"
 	"log"
+	"math"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -24,9 +25,24 @@ const (
 	TeamView    = 1
 )
 
+var taskColors = []color.Color{
+	color.RGBA{R: 255, G: 90, B: 33, A: 255},
+	color.RGBA{R: 42, G: 43, B: 61, A: 255},
+	color.RGBA{R: 58, G: 178, B: 218, A: 255},
+	color.RGBA{R: 111, G: 219, B: 161, A: 255},
+	color.RGBA{R: 242, G: 15, B: 98, A: 255},
+	color.RGBA{R: 240, G: 53, B: 9, A: 255},
+	color.RGBA{R: 247, G: 153, B: 174, A: 255},
+	color.RGBA{R: 79, G: 179, B: 129, A: 255},
+	color.RGBA{R: 180, G: 222, B: 180, A: 255},
+	color.RGBA{G: 146, B: 199, A: 255},
+	color.RGBA{120, 94, 0, 255},
+}
+
 func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, mw fyne.Window) *fyne.Container {
+
 	now := time.Now()
-	var retInterface *fyne.Container
+	var previewInterface *fyne.Container
 	curView := AccountView //0:个人， 1：团队
 	// 创建一个网格布局，每行显示一天的任务
 	viewPage := 0
@@ -37,6 +53,16 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 
 	data, expired := loadAccountGrid(client, mw)
 
+	flushInterface := func() {
+		switch curView {
+		case AccountView:
+			data, expired = loadAccountGrid(client, mw)
+			previewInterface.Refresh()
+		case TeamView:
+			data, expired = loadTeamGrid(client, mw)
+			previewInterface.Refresh()
+		}
+	}
 	list := make(map[int]*widget.List, 31)
 	expiredList := widget.NewList(
 		// 获取列表项的数量
@@ -45,32 +71,27 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		},
 		// 创建列表项的模板
 		func() fyne.CanvasObject {
-			return widget.NewLabel("Template")
+			bg := canvas.NewRectangle(color.Black)
+			btn := widget.NewButton("Do Something", nil)
+
+			return container.NewPadded(
+				container.NewBorder(nil, nil, bg, nil, btn),
+			)
 		},
 		// 更新列表项的内容
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(fmt.Sprintf("%s : %s", expired[i].TaskId, expired[i].Principal))
+		func(id widget.ListItemID, item fyne.CanvasObject) {
+			colid, _ := strconv.Atoi(expired[id].TaskId)
+			item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = taskColors[colid%len(taskColors)]
+			item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(fmt.Sprintf("%s : %s", expired[id].TaskId, expired[id].Principal))
+			item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
+				succeed := ModForm(expired[id].TaskId, client)
+				if succeed {
+					flushInterface()
+				}
+			}
 		},
 	)
 
-	expiredList.OnSelected = func(id widget.ListItemID) {
-		succeed := ModForm(&expired[id], client)
-		fmt.Println(succeed)
-		if succeed == 0 { //update
-			updateItem := expired[id]
-			expired = append(expired[:id], expired[id+1:]...)
-			newDateId := addData(updateItem, &expired, data)
-			expiredList.Refresh()
-			if newDateId != -1 {
-				list[newDateId].Refresh()
-				retInterface.Refresh()
-			}
-		} else if succeed == 1 { //delete
-			expired = append(expired[:id], expired[id+1:]...)
-			retInterface.Refresh()
-		}
-
-	}
 	expiredLabel := canvas.NewText("Expired", theme.Color(theme.ColorNameForeground))
 	// 设置Label的字体颜色
 	expiredLabel.TextStyle = fyne.TextStyle{Bold: true}
@@ -86,27 +107,26 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 			},
 			// 创建列表项的模板
 			func() fyne.CanvasObject {
-				return widget.NewLabel("Template")
+				bg := canvas.NewRectangle(color.Black)
+				btn := widget.NewButton("Do Something", nil)
+
+				return container.NewPadded(
+					container.NewBorder(nil, nil, bg, nil, btn),
+				)
 			},
 			// 更新列表项的内容
-			func(i widget.ListItemID, o fyne.CanvasObject) {
-				o.(*widget.Label).SetText(fmt.Sprintf("%s : %s", data[d][i].TaskId, data[d][i].Principal))
+			func(id widget.ListItemID, item fyne.CanvasObject) {
+				colid, _ := strconv.Atoi(data[d][id].TaskId)
+				item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = taskColors[colid%len(taskColors)]
+				item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(fmt.Sprintf("%s : %s", data[d][id].TaskId, data[d][id].Principal))
+				item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
+					succeed := ModForm(data[d][id].TaskId, client)
+					if succeed {
+						flushInterface()
+					}
+				}
 			},
 		)
-		list[d].OnSelected = func(id widget.ListItemID) {
-			succeed := ModForm(&data[d][id], client)
-			if succeed == 0 { //update
-				updateItem := data[d][id]
-				data[d] = append(data[d][:id], data[d][id+1:]...)
-				addData(updateItem, &expired, data)
-				expiredList.Refresh()
-				list[d].Refresh()
-				retInterface.Refresh()
-			} else if succeed == 1 { //delete
-				data[d] = append(data[d][:id], data[d][id+1:]...)
-				retInterface.Refresh()
-			}
-		}
 
 		date := now.AddDate(0, 0, d)
 		//dateLabel := widget.NewLabel(date.Format("2006-01-02"))
@@ -129,66 +149,24 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		newTask := addForm(client)
 		if newTask != nil {
 			addData(newTask, &expired, data)
-			retInterface.Refresh()
+			previewInterface.Refresh()
 		}
 	})
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		importWd := myapp.NewWindow("import")
-		input := widget.NewMultiLineEntry()
-		input.Resize(fyne.NewSize(600, 400))
-
-		output := widget.NewMultiLineEntry()
-		output.Resize(fyne.NewSize(600, 400))
-		outputChan := make(chan string)
-		input.Validator = func(s string) error {
-			if s == "" {
-				return errors.New("can not be empty")
-			}
-			return nil
-		}
-		form := &widget.Form{
-			Items: []*widget.FormItem{
-				{Text: "input:", Widget: input},
-				{Text: "result", Widget: output},
-			},
-			OnSubmit: func() {
-				paths := strings.Split(input.Text, "\n")
-				for _, path := range paths {
-					go ImportXLSForTaskList(path, client, outputChan)
-				}
-				go func() {
-					for res := range outputChan {
-						output.Append(res + "\n\r")
-					}
-				}()
-			},
-			OnCancel: func() {
-				importWd.Close()
-			},
-		}
-		importWd.SetContent(form)
-		importWd.Resize(fyne.NewSize(600, 400))
-		importWd.Show()
+		importController(client, common.ImportXLS.ImportXLStoTaskList)
 	})
 	accountBtn := widget.NewButtonWithIcon("", theme.AccountIcon(), func() {
 		curView = AccountView
 		data, expired = loadAccountGrid(client, mw)
-		retInterface.Refresh()
+		previewInterface.Refresh()
 	})
 	teamBtn := widget.NewButtonWithIcon("", theme.HomeIcon(), func() {
 		curView = TeamView
 		data, expired = loadTeamGrid(client, mw)
-		retInterface.Refresh()
+		previewInterface.Refresh()
 	})
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
-		switch curView {
-		case AccountView:
-			data, expired = loadAccountGrid(client, mw)
-			retInterface.Refresh()
-		case TeamView:
-			data, expired = loadTeamGrid(client, mw)
-			retInterface.Refresh()
-		}
+		flushInterface()
 	})
 	prevPageBtn := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
 		viewPage = max(viewPage-1, 0)
@@ -204,8 +182,8 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
 	topBtn = container.NewStack(bg, btnBar)
 
-	retInterface = container.NewBorder(topBtn, nil, nil, nil, viewGrid[0])
-	return retInterface
+	previewInterface = container.NewBorder(topBtn, nil, nil, nil, viewGrid[0])
+	return previewInterface
 }
 
 func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
@@ -219,17 +197,35 @@ func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
 	if weekday < 0 {
 		*expired = append(*expired, t)
 	} else {
-		data[weekday] = append(data[weekday], t)
+		low := max(0, weekday-(int(math.Ceil(float64(t.EstimatedWorkHours)/8.0))-1))
+		for d := low; d <= weekday; d++ {
+			data[d] = append(data[d], t)
+		}
 	}
 	return weekday
 }
 
-func ModForm(task **pb.Task, client pb.ServiceClient) int {
+func ModForm(taskId string, client pb.ServiceClient) bool {
 	modTaskWindow := myapp.NewWindow("Update")
 
-	Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
-	Id.SetText((*task).TaskId)
-	ReqNo.SetText((*task).ReqNo)
+	reply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{
+		Field:      "task_id",
+		FieldValue: taskId,
+	})
+	if err != nil {
+		dialog.ShowError(err, modTaskWindow)
+		return false
+	}
+	tasks := reply.Tasks
+	if tasks == nil || len(tasks) == 0 {
+		dialog.ShowError(errors.New("数据库中查询不到该id的任务 ："+taskId), modTaskWindow)
+		return false
+	}
+	task := tasks[0]
+
+	Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal := widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
+	Id.SetText(task.TaskId)
+	ReqNo.SetText(task.ReqNo)
 	Deadline.SetText((*task).Deadline)
 	Deadline.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", Deadline.Text)
@@ -239,10 +235,10 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 		return nil
 	}
 
-	Comment.SetText((*task).Comment)
+	Comment.SetText(task.Comment)
 
-	EmergencyLevel.SetText(fmt.Sprintf("%d", (*task).EmergencyLevel))
-	emergencyLevel32 := (*task).EmergencyLevel
+	EmergencyLevel.SetText(fmt.Sprintf("%d", task.EmergencyLevel))
+	emergencyLevel32 := task.EmergencyLevel
 	EmergencyLevel.Validator = func(in string) error {
 		if in == "" {
 			return errors.New("can not be empty")
@@ -252,8 +248,8 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 		return nil
 	}
 
-	EstimatedWorkHours.SetText(fmt.Sprintf("%d", (*task).EstimatedWorkHours))
-	estimatedWorkHours64 := (*task).EstimatedWorkHours
+	EstimatedWorkHours.SetText(fmt.Sprintf("%d", task.EstimatedWorkHours))
+	estimatedWorkHours64 := task.EstimatedWorkHours
 	EstimatedWorkHours.Validator = func(in string) error {
 		if in == "" {
 			return errors.New("can not be empty")
@@ -262,15 +258,15 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 		estimatedWorkHours64 = int64(tmp)
 		return nil
 	}
-	State.SetText((*task).State)
+	State.SetText(task.State)
 	State.Validator = func(in string) error {
 		if in == "" {
 			return errors.New("can not be empty")
 		}
 		return nil
 	}
-	Type.SetText(fmt.Sprintf("%d", (*task).TypeId))
-	typeid32 := (*task).TypeId
+	Type.SetText(fmt.Sprintf("%d", task.TypeId))
+	typeid32 := task.TypeId
 	Type.Validator = func(in string) error {
 		if in == "" {
 			return errors.New("can not be empty")
@@ -279,7 +275,7 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 		typeid32 = int32(tmp)
 		return nil
 	}
-	Principal.SetText((*task).Principal)
+	Principal.SetText(task.Principal)
 	Principal.Validator = func(in string) error {
 		if in == "" {
 			return errors.New("can not be empty")
@@ -298,18 +294,18 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 	//Principal.Disable()          // 设置为只读
 
 	// Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal
-	isSucceed := make(chan int) //-1 : 失败， 0：update  1 ： delete
+	isSucceed := make(chan bool)
 
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
 			if confirm {
-				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: (*task).TaskId})
+				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId})
 				if err != nil {
 					log.Printf("error deleting task: %v", err)
 					dialog.ShowError(err, modTaskWindow)
-					isSucceed <- -1
+					isSucceed <- false
 				} else {
-					isSucceed <- 1
+					isSucceed <- true
 					modTaskWindow.Close()
 					return
 				}
@@ -328,7 +324,7 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 			{Text: "需求号", Widget: ReqNo},
 			{Text: "截止日期", Widget: Deadline},
 			{Text: "负责人", Widget: Principal},
-			{Text: "预计工时", Widget: EstimatedWorkHours},
+			{Text: "预计工时(8h/d)", Widget: EstimatedWorkHours},
 			{Text: "紧急程度", Widget: EmergencyLevel},
 			{Text: "任务描述", Widget: Comment},
 			{Text: "任务类型", Widget: Type},
@@ -338,30 +334,29 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 		OnSubmit: func() {
 
 			newTask := &pb.Task{
-				TaskId:             (*task).TaskId,
+				TaskId:             task.TaskId,
 				Comment:            Comment.Text,
 				Deadline:           Deadline.Text,
 				EmergencyLevel:     emergencyLevel32,
 				EstimatedWorkHours: estimatedWorkHours64,
 				State:              State.Text,
 				TypeId:             typeid32,
-				ReqNo:              (*task).ReqNo,
+				ReqNo:              task.ReqNo,
 				Principal:          Principal.Text,
 			}
-			*task = newTask
 			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask})
 			if err != nil {
-				isSucceed <- -1
+				isSucceed <- false
 				log.Println(err)
 				return
 			} else {
-				isSucceed <- 0
+				isSucceed <- true
 				log.Println("update succeed")
 			}
 			modTaskWindow.Close()
 		},
 		OnCancel: func() {
-			isSucceed <- -1
+			isSucceed <- false
 			modTaskWindow.Close()
 		},
 	}
@@ -371,7 +366,7 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 	modTaskWindow.Show()
 
 	modTaskWindow.SetOnClosed(func() {
-		isSucceed <- -1
+		isSucceed <- false
 	})
 	return <-isSucceed
 }
@@ -379,12 +374,12 @@ func ModForm(task **pb.Task, client pb.ServiceClient) int {
 func addForm(client pb.ServiceClient) *pb.Task {
 	addTaskWindow := myapp.NewWindow("Update")
 
-	idEty, deadlineEty, reqNoEty, commentEty, emergencyLevelEty, estimatedWorkHoursEty, stateEty, typeEty, principalEty := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
+	idEty, deadlineEty, reqNoEty, commentEty, emergencyLevelEty, estimatedWorkHoursEty, stateEty, typeEty, principalEty := widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
 
 	deadlineEty.SetText(time.Now().Format("2006-01-02"))
 	commentEty.SetText("null")
 	emergencyLevelEty.SetText("0")
-	estimatedWorkHoursEty.SetText("72")
+	estimatedWorkHoursEty.SetText("24")
 	stateEty.SetText("带启动")
 	typeEty.SetText("0")
 	principalEty.SetText(UserName) //TODO: 默认登录者自己的名字，最后考虑权限的问题
@@ -479,6 +474,7 @@ func loadTeamGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.T
 	}
 	return data, expired
 }
+
 func loadAccountGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.Task, expired []*pb.Task) {
 	data = make(map[int][]*pb.Task)
 	expired = make([]*pb.Task, 0)

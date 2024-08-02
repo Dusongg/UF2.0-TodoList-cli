@@ -1,6 +1,7 @@
 package main
 
 import (
+	"OrderManager-cli/common"
 	"OrderManager-cli/pb"
 	"context"
 	"errors"
@@ -17,8 +18,21 @@ import (
 )
 
 func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasObject {
-	orderMap := loadPatchs(client, mw)
-	tree := widget.NewTree(
+	orderMap := loadAllPatchs(client, mw)
+
+	var tree *widget.Tree
+	delAndFlushTree := func(id string) {
+		delete(orderMap, id)
+		var newroot []string
+		for _, root := range orderMap[""] {
+			if root != id {
+				newroot = append(newroot, root)
+			}
+		}
+		orderMap[""] = newroot
+		tree.Refresh()
+	}
+	tree = widget.NewTree(
 		func(id widget.TreeNodeID) []widget.TreeNodeID {
 			return orderMap[id]
 		},
@@ -26,39 +40,47 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			return len(orderMap[id]) > 0
 		},
 		func(branch bool) fyne.CanvasObject {
-			return widget.NewLabel("Node")
+			return container.NewPadded(widget.NewButton("Do something", nil))
 		},
 		func(id widget.TreeNodeID, branch bool, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(id)
-		})
-	tree.OnSelected = func(id widget.TreeNodeID) {
-		if strings.HasPrefix(id, "P") {
-			retNo := ModPatchsForm(id, client)
-			if retNo == 1 { //删除
-				delete(orderMap, id)
-				var newroot []string
-				for _, root := range orderMap[""] {
-					if root != id {
-						newroot = append(newroot, root)
+			o.(*fyne.Container).Objects[0].(*widget.Button).SetText(id)
+			o.(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
+				if strings.HasPrefix(id, "P") {
+					retNo := ModPatchsForm(id, client)
+					if retNo == 1 { //删除
+						delAndFlushTree(id)
 					}
-				}
-				orderMap[""] = newroot
-				tree.Refresh()
-			}
-		} else if strings.HasPrefix(id, "T") {
+				} else if strings.HasPrefix(id, "T") {
+					if ModForm(id, client) {
+						orderMap = loadAllPatchs(client, mw)
+						tree.Refresh()
+					}
+				} else { //TODO：需求下添加任务
 
-		}
-	}
+				}
+			}
+
+		})
 
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-
+		importController(client, common.ImportXLS.ImportXLStoPatchTable)
+		orderMap = loadAllPatchs(client, mw)
+		tree.Refresh()
 	})
 	searchEntry := widget.NewEntry()
 	searchBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
-
+		if searchEntry.Text == "" {
+			orderMap = loadAllPatchs(client, mw)
+			tree.Refresh()
+		} else {
+			log.Println(searchEntry.Text)
+			orderMap = loadQueryPatchs(searchEntry.Text, client, mw)
+			tree.Refresh()
+		}
 	})
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
-
+		orderMap = loadAllPatchs(client, mw)
+		tree.Refresh()
 	})
 	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
 	searchBar := container.NewStack(bg, container.NewBorder(nil, nil, importBtn, container.NewHBox(searchBtn, flushBtn), searchEntry))
@@ -66,15 +88,17 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 	return container.NewBorder(searchBar, nil, nil, nil, tree)
 }
 
-func loadPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string {
+func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string {
 	patchsReply, err := client.GetPatchsAll(context.Background(), &pb.GetPatchsAllRequest{})
 	if err != nil {
 		dialog.ShowError(err, mw)
+		return nil
 	}
 	patchsData := patchsReply.Patchs
 	tasksReply, err := client.GetTaskListAll(context.Background(), &pb.GetTaskListAllRequest{})
 	if err != nil {
 		dialog.ShowError(err, mw)
+		return nil
 	}
 	tasksData := tasksReply.Tasks
 
@@ -84,6 +108,36 @@ func loadPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string {
 		keys = append(keys, patch.PatchNo)
 		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], patch.ReqNo)
 	}
+	for _, task := range tasksData {
+		orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
+	}
+	orderMap[""] = keys
+	return orderMap
+}
+
+// TODO: 该功能暂时只支持单个补丁查询
+// TODO: 问： 一个补丁对应一个需求在xls是在一行内还是在多行？  （当前：1补丁 -> 1需求 -> n任务）
+func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) map[string][]string {
+	patchsReply, err := client.GetOnePatchs(context.Background(), &pb.GetOnePatchsRequest{PatchNo: patchNo})
+	if err != nil {
+		dialog.ShowError(err, mw)
+		return nil
+	}
+	patchsData := patchsReply.P
+	tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: patchsData.ReqNo})
+	if err != nil {
+		dialog.ShowError(err, mw)
+		return nil
+	}
+	tasksData := tasksReply.Tasks
+
+	orderMap := make(map[string][]string)
+	keys := make([]string, 0)
+
+	//当前考虑搜索结果只有一个
+	keys = append(keys, patchNo)
+	orderMap[patchsData.PatchNo] = append(orderMap[patchsData.PatchNo], patchsData.ReqNo)
+
 	for _, task := range tasksData {
 		orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
 	}

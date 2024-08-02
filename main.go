@@ -4,9 +4,6 @@ import (
 	"OrderManager-cli/pb"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"image/color"
@@ -32,13 +29,18 @@ import (
 //TODO 1. 完成收件箱界面    √
 //TODO 2. 完成“补丁”      √
 //TODO 3. 预览模块选择展示自己或所有人    √
-//TODO 4. 考虑任务持续时间
+//TODO 4. 考虑任务持续时间     √
 //TODO 5. 定时邮件
 //TODO 6. 收件箱刷新     √
 
 //2024.8.2
-//TODO 1.补丁界面的任务单显示
-//TODO 2.完成补丁界面的任务栏部分的功能实现
+//TODO 1.补丁界面的任务单显示    √
+//TODO 2.完成补丁界面的任务栏部分的功能实现     √
+
+//2024.8.3
+//TODO 1. 补丁树补丁和任务颜色区分
+//TODO 2. 需求下添加任务功能
+//TODO 3. 检查ModForm函数
 
 const DAYSPERPAGE = 5
 
@@ -48,7 +50,6 @@ var UserName = "dusong"
 var myapp = app.New()
 
 func main() {
-
 	mw := myapp.NewWindow("Task List for the Week")
 	//月光石主题:深-》浅
 
@@ -62,60 +63,26 @@ func main() {
 	defer connect.Close()
 	client := pb.NewServiceClient(connect)
 
-	previewInterface := container.NewBorder(nil, nil, nil, nil, nil)
-	appTab := container.NewAppTabs(
-		container.NewTabItemWithIcon("预览", theme.ListIcon(), previewInterface),
-		container.NewTabItemWithIcon("收件箱", theme.StorageIcon(), container.NewVScroll(widget.NewLabel("TODO"))),
-		container.NewTabItemWithIcon("补丁", theme.VisibilityIcon(), widget.NewLabel("TODO")),
-		//container.NewTabItem("库", widget.NewLabel("TODO")),
-	)
-	//default
-	previewInterface = CreatePreviewInterface(appTab, client, mw)
-	appTab.Items[0].Content = previewInterface
-
-	appTab.SetTabLocation(container.TabLocationLeading) //竖着的标签
-
-	var inboxInterface fyne.CanvasObject
-	var patchsInterface fyne.CanvasObject
-	appTab.OnSelected = func(item *container.TabItem) {
-		if item == appTab.Items[1] && inboxInterface == nil {
-			inboxInterface = CreateInBoxInterface(client, mw)
-			appTab.Items[1].Content = inboxInterface
+	loginChan := make(chan bool)
+	loginWd := myapp.NewWindow("Login/Register")
+	loginWd.Resize(fyne.NewSize(500, 300))
+	go showLoginScreen(client, loginWd, loginChan)
+	loginWd.Show()
+	go func() {
+		if isSuccess := <-loginChan; isSuccess {
+			loginWd.Hide()
+			showMainInterface(client, mw)
+			mw.Resize(fyne.NewSize(1000, 600))
+			mw.Show()
+		} else {
+			myapp.Quit()
 		}
-		if item == appTab.Items[2] && patchsInterface == nil {
-			patchsInterface = CreatePatchsInterface(client, mw)
-			appTab.Items[2].Content = patchsInterface
-		}
-	}
+	}()
+	mw.SetOnClosed(func() {
+		myapp.Quit()
+	})
+	myapp.Run()
 
-	// 设置窗口内容
-	mw.SetContent(appTab)
-	// 设置窗口大小并显示
-	mw.Resize(fyne.NewSize(1000, 600))
-	mw.ShowAndRun()
-
-}
-
-type task struct {
-	comment            string
-	taskId             string
-	emergencyLevel     int32
-	deadline           string
-	principal          string
-	reqNo              string
-	estimatedWorkHours int64
-	state              string
-	typeId             int32
-}
-
-type patch struct {
-	patchNo    string
-	reqNo      string
-	describe   string
-	clientName string
-	deadline   string
-	reason     string
-	sponsor    string
 }
 
 // 规范化导出文件的导入
