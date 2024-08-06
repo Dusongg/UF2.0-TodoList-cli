@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"log"
+	"strconv"
 )
 
 func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan chan bool) {
@@ -40,8 +41,8 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 			dialog.ShowError(err, loginWd)
 			return
 		} else {
-			UserName = user
-			log.Printf("login success, user: %s\n", UserName)
+			LoginUser = user
+			log.Printf("login success, user: %s\n", LoginUser)
 			loginChan <- true
 			return
 		}
@@ -78,8 +79,8 @@ func showRegisterScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan 
 		pass := password.Text
 		confirmPass := confirmPassword.Text
 		email_ := email.Text
-		jobNum_ := jobNum.Text
-		if user == "" || pass == "" || confirmPass == "" || email_ == "" || jobNum_ == "" {
+		jobNum_, err := strconv.Atoi(jobNum.Text)
+		if user == "" || pass == "" || confirmPass == "" || email_ == "" || err != nil {
 			dialog.ShowError(errors.New("any item cannot be empty"), loginWd)
 			return
 		}
@@ -87,12 +88,12 @@ func showRegisterScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan 
 			dialog.ShowError(errors.New("confirm password error"), loginWd)
 		}
 
-		_, err := client.Register(context.Background(), &pb.RegisterRequest{
+		_, err = client.Register(context.Background(), &pb.RegisterRequest{
 			User: &pb.User{
 				Name:     user,
 				Password: pass,
 				Email:    email_,
-				JobNum:   jobNum_,
+				JobNum:   int64(jobNum_),
 			}})
 		if err != nil {
 			dialog.ShowError(err, loginWd)

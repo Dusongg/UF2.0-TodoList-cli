@@ -2,10 +2,12 @@ package common
 
 import (
 	"OrderManager-cli/pb"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/extrame/xls"
-	"log"
+	"os/exec"
 	"time"
 )
 
@@ -73,53 +75,47 @@ func (*importXLS) ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, r
 
 	req := pb.ImportToTaskListRequest{}
 	for _, t := range allInsert {
-		req.Tasks = append(req.Tasks, &pb.Task{TaskId: t.taskId, Comment: t.comment, EmergencyLevel: t.emergencyLevel,
-			Deadline: t.deadline, Principal: t.principal, ReqNo: t.reqNo,
-			EstimatedWorkHours: t.estimatedWorkHours, State: t.state, TypeId: t.typeId})
+		req.Tasks = append(req.Tasks, &pb.Task{TaskId: t.taskId, Comment: t.comment, EmergencyLevel: t.emergencyLevel, Principal: t.principal, ReqNo: t.reqNo})
 	}
 
-	reply, err := client.ImportToTaskListTable(context.Background(), &req)
+	_, err = client.ImportToTaskListTable(context.Background(), &req)
 	if err != nil {
 		resChan <- fmt.Sprintf(err.Error())
 		return
 	}
-	resChan <- fmt.Sprintf("%s import complete, insert count: %d", xlsFile, reply.InsertCnt)
+	resChan <- fmt.Sprintf("%s import complete", xlsFile)
 	return
 }
 
 func (*importXLS) ImportXLStoPatchTable(xlsFile string, client pb.ServiceClient, resChan chan string) {
-	workbook, err := xls.Open(xlsFile, "utf-8")
+	cmd := exec.Command("python", "D:\\Golang\\OrderManager-cli\\pytool\\read_xls.py", xlsFile)
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
 	if err != nil {
-		resChan <- fmt.Sprintf("err: %v", err)
-		return
+		resChan <- fmt.Errorf("cmd.Run() failed with %s: %s", err, stderr.String()).Error()
 	}
 
-	sheet := workbook.GetSheet(0)
-	if sheet == nil {
-		resChan <- fmt.Sprintf("err: 没有找到工作表：临时补丁导出 in %s", xlsFile)
+	var data [][]string
+	err = json.Unmarshal(out.Bytes(), &data)
+	if err != nil {
+		resChan <- err.Error()
 		return
 	}
 	req := pb.ImportXLSToPatchRequest{}
-	for i := 0; i <= int(sheet.MaxRow); i++ {
-		row := sheet.Row(i)
-		if row == nil {
-			log.Printf("row %d is nil", i)
-			continue
-		}
-		deadline, err := time.Parse("20060102", row.Col(14))
-		if err != nil {
-			log.Printf("err: %v", err)
-			continue
-		}
-
+	for _, row := range data {
+		t, _ := time.Parse("20060102", row[5])
 		patch := &pb.Patch{
-			ReqNo:      row.Col(0),
-			PatchNo:    row.Col(1),
-			Describe:   row.Col(2),
-			ClientName: row.Col(3),
-			Reason:     row.Col(12),
-			Deadline:   deadline.Format("2006-01-02"),
-			Sponsor:    row.Col(19),
+			ReqNo:      row[0],
+			PatchNo:    row[1],
+			Describe:   row[2],
+			ClientName: row[3],
+			Reason:     row[4],
+			Deadline:   t.Format("2006-01-02"),
+			Sponsor:    row[6],
 		}
 
 		//TODO: 最后一行读取错误问题
@@ -127,12 +123,12 @@ func (*importXLS) ImportXLStoPatchTable(xlsFile string, client pb.ServiceClient,
 
 		req.Patchs = append(req.Patchs, patch)
 	}
-
-	reply, err := client.ImportXLSToPatchTable(context.Background(), &req)
+	_, err = client.ImportXLSToPatchTable(context.Background(), &req)
 	if err != nil {
 		resChan <- fmt.Sprintf(err.Error())
 		return
 	}
-	resChan <- fmt.Sprintf("%s import complete, insert count: %d", xlsFile, reply.InsertCnt)
+	resChan <- fmt.Sprintf("%s import complete", xlsFile)
 	return
+
 }

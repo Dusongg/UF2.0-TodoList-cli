@@ -32,7 +32,10 @@ func importController(client pb.ServiceClient, importFunc func(string, pb.Servic
 			paths := strings.Split(input.Text, "\n")
 			for _, path := range paths {
 				//去除粘贴过来时的引号
-				go importFunc(path[1:len(path)-1], client, outputChan)
+				if strings.HasPrefix(path, "\"") && strings.HasSuffix(path, "\"") {
+					path = path[1 : len(path)-1]
+				}
+				go importFunc(path, client, outputChan)
 			}
 			go func() {
 				for res := range outputChan {

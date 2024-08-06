@@ -17,6 +17,12 @@ import (
 	"time"
 )
 
+var (
+	COLOR_PATCHS = color.RGBA{52, 70, 94, 255}
+	COLOR_REQ    = color.RGBA{84, 117, 161, 255}
+	COLOR_TASK   = color.RGBA{125, 169, 227, 255}
+)
+
 func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasObject {
 	orderMap := loadAllPatchs(client, mw)
 
@@ -40,23 +46,35 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			return len(orderMap[id]) > 0
 		},
 		func(branch bool) fyne.CanvasObject {
-			return container.NewPadded(widget.NewButton("Do something", nil))
+			bg := canvas.NewRectangle(color.Black)
+			btn := widget.NewButton("Do something", nil)
+			return container.NewPadded(
+				container.NewBorder(nil, nil, bg, nil, btn),
+			)
 		},
 		func(id widget.TreeNodeID, branch bool, o fyne.CanvasObject) {
-			o.(*fyne.Container).Objects[0].(*widget.Button).SetText(id)
-			o.(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
-				if strings.HasPrefix(id, "P") {
+			if strings.HasPrefix(id, "P") { //补丁
+				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = COLOR_PATCHS
+
+			} else if strings.HasPrefix(id, "T") {
+				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = COLOR_TASK
+			} else {
+				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = COLOR_REQ
+			}
+			o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(id)
+			o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
+				if strings.HasPrefix(id, "P") { //补丁
+
 					retNo := ModPatchsForm(id, client)
 					if retNo == 1 { //删除
 						delAndFlushTree(id)
 					}
-				} else if strings.HasPrefix(id, "T") {
+				} else if strings.HasPrefix(id, "T") { //任务/修改单
+
 					if ModForm(id, client) {
 						orderMap = loadAllPatchs(client, mw)
 						tree.Refresh()
 					}
-				} else { //TODO：需求下添加任务
-
 				}
 			}
 

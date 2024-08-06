@@ -10,7 +10,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"image/color"
@@ -51,12 +50,12 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		viewGrid[i] = container.NewGridWithRows(1)
 	}
 
-	data, expired := loadAccountGrid(client, mw)
+	data, expired := loadAccountGrid(client, mw, LoginUser)
 
 	flushInterface := func() {
 		switch curView {
 		case AccountView:
-			data, expired = loadAccountGrid(client, mw)
+			data, expired = loadAccountGrid(client, mw, LoginUser)
 			previewInterface.Refresh()
 		case TeamView:
 			data, expired = loadTeamGrid(client, mw)
@@ -155,11 +154,23 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
 		importController(client, common.ImportXLS.ImportXLStoTaskList)
 	})
+	accountEty := widget.NewEntry()
+	accountEty.PlaceHolder = "请输入姓名进行查询"
 	accountBtn := widget.NewButtonWithIcon("", theme.AccountIcon(), func() {
 		curView = AccountView
-		data, expired = loadAccountGrid(client, mw)
+		if accountEty.Text != "" {
+			//TODO:没有考虑用户是否存在
+			data, expired = loadAccountGrid(client, mw, accountEty.Text)
+		} else {
+			data, expired = loadAccountGrid(client, mw, LoginUser)
+		}
 		previewInterface.Refresh()
 	})
+	accountBtnWithBg := container.NewStack(canvas.NewRectangle(colorTheme1), accountBtn)
+
+	//accountBg := canvas.NewRectangle(colorTheme1)
+	//accountBox := container.NewStack(accountBg, container.NewHBox(accountBtn, accountEty, nil))
+
 	teamBtn := widget.NewButtonWithIcon("", theme.HomeIcon(), func() {
 		curView = TeamView
 		data, expired = loadTeamGrid(client, mw)
@@ -171,14 +182,13 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	prevPageBtn := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
 		viewPage = max(viewPage-1, 0)
 		updateCurViewGrid()
-		fmt.Println(viewPage)
 	})
 	nextPageBtn := widget.NewButtonWithIcon("", theme.MediaFastForwardIcon(), func() {
 		viewPage = min(viewPage+1, 6)
 		updateCurViewGrid()
-		fmt.Println(viewPage)
 	})
-	btnBar := container.NewHBox(addBtn, importBtn, accountBtn, teamBtn, flushBtn, layout.NewSpacer(), prevPageBtn, nextPageBtn)
+
+	btnBar := container.NewBorder(nil, nil, container.NewHBox(addBtn, importBtn, flushBtn, teamBtn, accountBtnWithBg), container.NewHBox(prevPageBtn, nextPageBtn), container.NewStack(canvas.NewRectangle(colorTheme1), accountEty))
 	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
 	topBtn = container.NewStack(bg, btnBar)
 
@@ -382,7 +392,7 @@ func addForm(client pb.ServiceClient) *pb.Task {
 	estimatedWorkHoursEty.SetText("24")
 	stateEty.SetText("带启动")
 	typeEty.SetText("0")
-	principalEty.SetText(UserName) //TODO: 默认登录者自己的名字，最后考虑权限的问题
+	principalEty.SetText(LoginUser) //TODO: 默认登录者自己的名字，最后考虑权限的问题
 
 	deadlineEty.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", in)
@@ -475,10 +485,10 @@ func loadTeamGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.T
 	return data, expired
 }
 
-func loadAccountGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.Task, expired []*pb.Task) {
+func loadAccountGrid(client pb.ServiceClient, mw fyne.Window, name string) (data map[int][]*pb.Task, expired []*pb.Task) {
 	data = make(map[int][]*pb.Task)
 	expired = make([]*pb.Task, 0)
-	reply, err := client.GetTaskListOne(context.Background(), &pb.GetTaskListOneRequest{Name: UserName})
+	reply, err := client.GetTaskListOne(context.Background(), &pb.GetTaskListOneRequest{Name: name})
 	if err != nil {
 		dialog.ShowError(err, mw)
 	}

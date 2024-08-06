@@ -38,15 +38,15 @@ import (
 //TODO 2.完成补丁界面的任务栏部分的功能实现     √
 
 //2024.8.3
-//TODO 1. 补丁树补丁和任务颜色区分
-//TODO 2. 需求下添加任务功能
-//TODO 3. 检查ModForm函数
+//TODO 1. 补丁树下的颜色渐变    √
+//TODO 2. 需求和任务下添加任务功能
+//TODO 3. 检查ModForm函数  √
 
 const DAYSPERPAGE = 5
 
 var colorTheme1 = color.RGBA{R: 57, G: 72, B: 94, A: 255}
 
-var UserName = "dusong"
+var LoginUser string
 var myapp = app.New()
 
 func main() {
@@ -59,6 +59,8 @@ func main() {
 	connect, err := grpc.NewClient(":8001", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		log.Println("connect success")
 	}
 	defer connect.Close()
 	client := pb.NewServiceClient(connect)
