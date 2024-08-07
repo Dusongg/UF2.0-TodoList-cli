@@ -1,5 +1,6 @@
 package main
 
+// go build -ldflags="-H windowsgui"
 import (
 	"OrderManager-cli/pb"
 	"fyne.io/fyne/v2"
