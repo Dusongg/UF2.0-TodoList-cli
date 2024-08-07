@@ -11,38 +11,6 @@ import (
 	"log"
 )
 
-//2024.7.30
-//TODO: 1. 改用map存储，展示近五天  √
-//TODO: 2. 新增一行：添加任务 + 下一页   √
-//TODO: 3. 添加任务选项    √
-//TODO: 4. 添加或者就该任务之后,对于本地以及其他用户的界面刷新数据问题  √
-//TODO: 5. 导入数据按钮    √
-//TODO: 6. 处理过期任务    √
-
-//2024.7.31
-//TODO: 1. 批量导入数据	√
-//TODO: 2. 收件箱界面     √
-//TODO: 3. 表单点击输入框将默认值写出来  √
-//TODO: 4. 登录 & 自动登录   session-redis?
-//TODO: 5. 删除操作   √
-
-//2024.8.1
-//TODO 1. 完成收件箱界面    √
-//TODO 2. 完成“补丁”      √
-//TODO 3. 预览模块选择展示自己或所有人    √
-//TODO 4. 考虑任务持续时间     √
-//TODO 5. 定时邮件
-//TODO 6. 收件箱刷新     √
-
-//2024.8.2
-//TODO 1.补丁界面的任务单显示    √
-//TODO 2.完成补丁界面的任务栏部分的功能实现     √
-
-//2024.8.3
-//TODO 1. 补丁树下的颜色渐变    √
-//TODO 2. 需求和任务下添加任务功能
-//TODO 3. 检查ModForm函数  √
-
 const DAYSPERPAGE = 5
 
 var colorTheme1 = color.RGBA{R: 57, G: 72, B: 94, A: 255}
@@ -51,6 +19,13 @@ var LoginUser string
 var myapp = app.New()
 
 func main() {
+
+	//defer func() {
+	//	if r := recover(); r != nil {
+	//		fmt.Println("Recovered in f", r)
+	//	}
+	//}()
+
 	mw := myapp.NewWindow("Task List for the Week")
 	//月光石主题:深-》浅
 

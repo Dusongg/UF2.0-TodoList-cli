@@ -141,24 +141,26 @@ func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) ma
 		dialog.ShowError(err, mw)
 		return nil
 	}
-	patchsData := patchsReply.P
-	tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: patchsData.ReqNo})
-	if err != nil {
-		dialog.ShowError(err, mw)
-		return nil
-	}
-	tasksData := tasksReply.Tasks
-
 	orderMap := make(map[string][]string)
 	keys := make([]string, 0)
-
-	//当前考虑搜索结果只有一个
 	keys = append(keys, patchNo)
-	orderMap[patchsData.PatchNo] = append(orderMap[patchsData.PatchNo], patchsData.ReqNo)
 
-	for _, task := range tasksData {
-		orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
+	patchsDatas := patchsReply.Patchs
+	for _, patch := range patchsDatas {
+		tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: patch.ReqNo})
+		if err != nil {
+			dialog.ShowError(err, mw)
+			return nil
+		}
+		tasksData := tasksReply.Tasks
+
+		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], patch.ReqNo)
+
+		for _, task := range tasksData {
+			orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
+		}
 	}
+
 	orderMap[""] = keys
 	return orderMap
 }

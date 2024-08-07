@@ -27,6 +27,7 @@ func flushData(client pb.ServiceClient, mw fyne.Window) [][]interface{} {
 	reply, err := client.GetTaskListAll(context.Background(), &pb.GetTaskListAllRequest{})
 	if err != nil {
 		dialog.ShowError(err, mw)
+		return nil
 	}
 	tableData := make([][]interface{}, 0)
 	tableData = append(tableData, []interface{}{"TaskId", "Principal", "ReqNo", "Deadline", "WorkHours", "Comment", "State", "Level", "TypeId"})
@@ -41,6 +42,9 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 	reply, err := client.GetTaskListAll(context.Background(), &pb.GetTaskListAllRequest{})
 	if err != nil {
 		dialog.ShowError(err, mw)
+		errRet := widget.NewEntry()
+		errRet.SetPlaceHolder(err.Error())
+		return errRet
 	}
 	tableData := buildData(reply.Tasks)
 

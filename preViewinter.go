@@ -314,6 +314,7 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 					log.Printf("error deleting task: %v", err)
 					dialog.ShowError(err, modTaskWindow)
 					isSucceed <- false
+					return
 				} else {
 					isSucceed <- true
 					modTaskWindow.Close()
@@ -478,6 +479,7 @@ func loadTeamGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.T
 	reply, err := client.GetTaskListAll(context.Background(), &pb.GetTaskListAllRequest{})
 	if err != nil {
 		dialog.ShowError(err, mw)
+		return
 	}
 	for _, task := range reply.Tasks {
 		addData(task, &expired, data)
@@ -491,6 +493,7 @@ func loadAccountGrid(client pb.ServiceClient, mw fyne.Window, name string) (data
 	reply, err := client.GetTaskListOne(context.Background(), &pb.GetTaskListOneRequest{Name: name})
 	if err != nil {
 		dialog.ShowError(err, mw)
+		return
 	}
 	for _, task := range reply.Tasks {
 		addData(task, &expired, data)
