@@ -152,7 +152,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		}
 	})
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		importController(client, common.ImportXLS.ImportXLStoTaskList)
+		common.ImportController(myapp, client, common.ImportXLStoTaskListByPython)
 	})
 	accountEty := widget.NewEntry()
 	accountEty.PlaceHolder = "请输入姓名进行查询"

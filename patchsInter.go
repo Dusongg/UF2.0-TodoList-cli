@@ -81,7 +81,7 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 		})
 
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		importController(client, common.ImportXLS.ImportXLStoPatchTable)
+		common.ImportController(myapp, client, common.ImportXLStoPatchTableByPython)
 		orderMap = loadAllPatchs(client, mw)
 		tree.Refresh()
 	})

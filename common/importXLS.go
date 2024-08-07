@@ -5,29 +5,147 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 	"github.com/extrame/xls"
+	"log"
 	"os/exec"
+	"strings"
 	"time"
 )
 
-type task struct {
-	comment            string
-	taskId             string
-	emergencyLevel     int32
-	deadline           string
-	principal          string
-	reqNo              string
-	estimatedWorkHours int64
-	state              string
-	typeId             int32
+type importTask struct {
+	comment   string
+	taskId    string
+	principal string
+	reqNo     string
+	state     string
 }
 
-type importXLS struct{}
+func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(string, pb.ServiceClient, chan string)) {
+	importWd := myapp.NewWindow("import")
+	input := widget.NewMultiLineEntry()
+	input.Resize(fyne.NewSize(600, 400))
 
-var ImportXLS = &importXLS{}
+	output := widget.NewMultiLineEntry()
+	output.Resize(fyne.NewSize(600, 400))
+	outputChan := make(chan string)
+	input.Validator = func(s string) error {
+		if s == "" {
+			return errors.New("can not be empty")
+		}
+		return nil
+	}
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{Text: "input:", Widget: input},
+			{Text: "result", Widget: output},
+		},
+		OnSubmit: func() {
+			output.SetText("")
+			paths := strings.Split(input.Text, "\n")
+			for _, path := range paths {
+				//去除粘贴过来时的引号
+				if strings.HasPrefix(path, "\"") && strings.HasSuffix(path, "\"") {
+					path = path[1 : len(path)-1]
+				}
+				go importFunc(path, client, outputChan)
+			}
+			go func() {
+				for res := range outputChan {
+					output.Append(res + "\n\r")
+				}
+			}()
+		},
+		OnCancel: func() {
+			importWd.Close()
+		},
+	}
+	importWd.SetContent(form)
+	importWd.Resize(fyne.NewSize(600, 400))
+	importWd.Show()
+}
 
-func (*importXLS) ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, resChan chan string) {
+func ImportXLStoTaskListByPython(xlsFile string, client pb.ServiceClient, resChan chan string) {
+	cmd := exec.Command("D:\\Golang\\OrderManager-cli\\pytool\\read_xls_task.exe", xlsFile)
+	//var out bytes.Buffer
+	//var stderr bytes.Buffer
+	//cmd.Stdout = &out
+	//cmd.Stderr = &stderr
+	//
+	//err := cmd.Run()
+	//if err != nil {
+	//	resChan <- fmt.Errorf("cmd.Run() failed with %s: %s", err, stderr.String()).Error()
+	//	return
+	//}
+	//
+	//if stderr.Len() > 0 {
+	//	resChan <- fmt.Sprintf("%s", stderr.String())
+	//	return
+	//}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		resChan <- fmt.Sprintf("Failed to execute command: %v", err)
+		return
+	}
+
+	outputStr := string(output)
+	if cmd.ProcessState.ExitCode() != 0 {
+		resChan <- fmt.Sprintf("Python script error: %s\n", outputStr)
+		return
+	}
+
+	var result map[string][][]string
+	err = json.Unmarshal(output, &result)
+	if err != nil {
+		log.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	//修改单信息
+	taskMap := make(map[string]*importTask)
+	for _, row := range result["sheet3"] {
+		taskMap[row[0]] = &importTask{
+			taskId:    row[0],
+			state:     row[1],
+			principal: row[2],
+		}
+	}
+	for _, row := range result["sheet4"] {
+		if task, ok := taskMap[row[0]]; ok {
+			task.comment = row[1]
+
+			parts := strings.Split(row[2], ".")
+			if len(parts) != 0 {
+				task.reqNo = parts[0]
+			} else {
+				task.reqNo = row[2]
+			}
+		}
+	}
+	req := &pb.ImportToTaskListRequest{}
+	for _, task := range taskMap {
+		req.Tasks = append(req.Tasks, &pb.Task{
+			Comment:   task.comment,
+			TaskId:    task.taskId,
+			ReqNo:     task.reqNo,
+			Principal: task.principal,
+			State:     task.state,
+		})
+		//fmt.Printf("id: %s, reqNo: %s, comment: %s, state: %s, principal: %s\n", task.taskId, task.reqNo, task.comment, task.state, task.principal)
+	}
+	_, err = client.ImportToTaskListTable(context.Background(), req)
+	if err != nil {
+		resChan <- fmt.Sprintf(err.Error())
+		return
+	}
+	resChan <- fmt.Sprintf("%s import complete", xlsFile)
+	return
+}
+
+func ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, resChan chan string) {
 	// 打开.xls文件
 	workbook, err := xls.Open(xlsFile, "utf-8")
 	if err != nil {
@@ -35,7 +153,7 @@ func (*importXLS) ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, r
 		return
 	}
 
-	allInsert := make(map[string]*task)
+	allInsert := make(map[string]*importTask)
 
 	// 读取“修改单信息”工作表中的数据
 	sheet := workbook.GetSheet(2)
@@ -51,7 +169,7 @@ func (*importXLS) ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, r
 		colState := row.Col(2)
 		colPrincipal := row.Col(3)
 
-		allInsert[colTaskID] = &task{taskId: colTaskID, state: colState, principal: colPrincipal}
+		allInsert[colTaskID] = &importTask{taskId: colTaskID, state: colState, principal: colPrincipal}
 	}
 
 	sheet = workbook.GetSheet(3)
@@ -75,7 +193,7 @@ func (*importXLS) ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, r
 
 	req := pb.ImportToTaskListRequest{}
 	for _, t := range allInsert {
-		req.Tasks = append(req.Tasks, &pb.Task{TaskId: t.taskId, Comment: t.comment, EmergencyLevel: t.emergencyLevel, Principal: t.principal, ReqNo: t.reqNo})
+		req.Tasks = append(req.Tasks, &pb.Task{TaskId: t.taskId, Comment: t.comment, Principal: t.principal, ReqNo: t.reqNo, State: t.state})
 	}
 
 	_, err = client.ImportToTaskListTable(context.Background(), &req)
@@ -87,8 +205,8 @@ func (*importXLS) ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, r
 	return
 }
 
-func (*importXLS) ImportXLStoPatchTable(xlsFile string, client pb.ServiceClient, resChan chan string) {
-	cmd := exec.Command("python", "D:\\Golang\\OrderManager-cli\\pytool\\read_xls.py", xlsFile)
+func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resChan chan string) {
+	cmd := exec.Command("D:\\Golang\\OrderManager-cli\\pytool\\read_xls.exe", xlsFile)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -97,8 +215,13 @@ func (*importXLS) ImportXLStoPatchTable(xlsFile string, client pb.ServiceClient,
 	err := cmd.Run()
 	if err != nil {
 		resChan <- fmt.Errorf("cmd.Run() failed with %s: %s", err, stderr.String()).Error()
+		return
 	}
 
+	if stderr.Len() > 0 {
+		resChan <- fmt.Sprintf("%s", stderr.String())
+		return
+	}
 	var data [][]string
 	err = json.Unmarshal(out.Bytes(), &data)
 	if err != nil {
