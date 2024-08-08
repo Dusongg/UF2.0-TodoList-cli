@@ -2,6 +2,7 @@ package main
 
 import (
 	"OrderManager-cli/common"
+	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
 	"context"
 	"errors"
@@ -50,12 +51,12 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		viewGrid[i] = container.NewGridWithRows(1)
 	}
 
-	data, expired := loadAccountGrid(client, mw, LoginUser)
+	data, expired := loadAccountGrid(client, mw, config.LoginUser)
 
 	flushInterface := func() {
 		switch curView {
 		case AccountView:
-			data, expired = loadAccountGrid(client, mw, LoginUser)
+			data, expired = loadAccountGrid(client, mw, config.LoginUser)
 			previewInterface.Refresh()
 		case TeamView:
 			data, expired = loadTeamGrid(client, mw)
@@ -152,7 +153,16 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		}
 	})
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		common.ImportController(myapp, client, common.ImportXLStoTaskListByPython)
+		flushChan := make(chan struct{})
+		common.ImportController(myapp, client, common.ImportXLStoTaskListByPython, flushChan)
+		for {
+			_, ok := <-flushChan
+			if ok {
+				flushInterface()
+			} else {
+				break
+			}
+		}
 	})
 	accountEty := widget.NewEntry()
 	accountEty.PlaceHolder = "请输入姓名进行查询"
@@ -162,7 +172,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 			//TODO:没有考虑用户是否存在
 			data, expired = loadAccountGrid(client, mw, accountEty.Text)
 		} else {
-			data, expired = loadAccountGrid(client, mw, LoginUser)
+			data, expired = loadAccountGrid(client, mw, config.LoginUser)
 		}
 		previewInterface.Refresh()
 	})
@@ -309,7 +319,7 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
 			if confirm {
-				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId})
+				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.LoginUser, Principal: task.Principal})
 				if err != nil {
 					log.Printf("error deleting task: %v", err)
 					dialog.ShowError(err, modTaskWindow)
@@ -355,7 +365,7 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 				ReqNo:              task.ReqNo,
 				Principal:          Principal.Text,
 			}
-			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask})
+			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask, User: config.LoginUser})
 			if err != nil {
 				isSucceed <- false
 				log.Println(err)
@@ -393,7 +403,7 @@ func addForm(client pb.ServiceClient) *pb.Task {
 	estimatedWorkHoursEty.SetText("24")
 	stateEty.SetText("带启动")
 	typeEty.SetText("0")
-	principalEty.SetText(LoginUser) //TODO: 默认登录者自己的名字，最后考虑权限的问题
+	principalEty.SetText(config.LoginUser) //TODO: 默认登录者自己的名字，最后考虑权限的问题
 
 	deadlineEty.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", in)
@@ -448,7 +458,7 @@ func addForm(client pb.ServiceClient) *pb.Task {
 				Principal:          principalEty.Text,
 			}
 
-			_, err := client.AddTask(context.Background(), &pb.AddTaskRequest{T: newTask})
+			_, err := client.AddTask(context.Background(), &pb.AddTaskRequest{T: newTask, User: config.LoginUser})
 			if err != nil {
 				dialog.NewInformation("error", err.Error(), addTaskWindow).Show()
 			} else {

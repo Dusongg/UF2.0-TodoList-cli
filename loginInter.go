@@ -1,6 +1,7 @@
 package main
 
 import (
+	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
 	"context"
 	"errors"
@@ -21,7 +22,7 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 	password.SetText("123123")
 	//
 	loginForm := widget.NewForm(
-		widget.NewFormItem("Username", username),
+		widget.NewFormItem("Username/Id", username),
 		widget.NewFormItem("Password", password),
 	)
 
@@ -41,8 +42,8 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 			dialog.ShowError(err, loginWd)
 			return
 		} else {
-			LoginUser = user
-			log.Printf("login success, user: %s\n", LoginUser)
+			config.LoginUser = user
+			log.Printf("login success, user: %s\n", config.LoginUser)
 			loginChan <- true
 			return
 		}

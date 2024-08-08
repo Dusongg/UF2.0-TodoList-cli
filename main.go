@@ -1,24 +1,68 @@
+//
+
+//2024.8.8
+//TODO: 1. 导入后直接刷新
+//TODO: 2. 导入补丁时补丁树的需求层没有分割逗号
+//TODO: 3. 优化登录界面
+//TODO: 4. 用工号登录后界面没有显示
+//TODO: 5. redis消息队列实现订阅发布模式
+//TODO: 6. 避免重复登录相同用户
+//TODO: 7. 考虑要不要做补丁过期自动删除
+
 package main
 
 // go build -ldflags="-H windowsgui"
 import (
+	"OrderManager-cli/common"
+	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
+	"context"
+	_ "embed"
+	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/dialog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"image/color"
 	"log"
+	"os"
+	"path/filepath"
 )
+
+//go:embed pytool/read_xls_task.exe
+var EmbeddedExeTask []byte
+
+//go:embed pytool/read_xls.exe
+var EmbeddedExePatchs []byte
 
 const DAYSPERPAGE = 5
 
 var colorTheme1 = color.RGBA{R: 57, G: 72, B: 94, A: 255}
 
-var LoginUser string
 var myapp = app.New()
 
 func main() {
+	tempDir, err := os.MkdirTemp("", "embedded_exe")
+	if err != nil {
+		fmt.Println("Failed to create temp dir:", err)
+		return
+	}
+	defer os.RemoveAll(tempDir)
+
+	common.ExePathTask = filepath.Join(tempDir, "read_xls_task.exe")
+	err = os.WriteFile(common.ExePathTask, EmbeddedExeTask, 0755)
+	if err != nil {
+		fmt.Println("Failed to write embedded exe:", err)
+		return
+	}
+
+	common.ExePathPatchs = filepath.Join(tempDir, "read_xls.exe")
+	err = os.WriteFile(common.ExePathPatchs, EmbeddedExePatchs, 0755)
+	if err != nil {
+		fmt.Println("Failed to write embedded exe:", err)
+		return
+	}
 
 	//defer func() {
 	//	if r := recover(); r != nil {
@@ -49,6 +93,22 @@ func main() {
 	go func() {
 		if isSuccess := <-loginChan; isSuccess {
 			loginWd.Hide()
+			notifyClient := pb.NewNotificationServiceClient(connect)
+			stream, err := notifyClient.Subscribe(context.Background(), &pb.SubscriptionRequest{ClientId: config.LoginUser})
+			if err != nil {
+				log.Fatalf("Failed to subscribe: %v", err)
+			}
+
+			go func() {
+				for {
+					notification, err := stream.Recv()
+					if err != nil {
+						dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
+					}
+					dialog.ShowInformation("Information from others", fmt.Sprintf("Received notification: %s", notification.Message), mw)
+				}
+			}()
+
 			showMainInterface(client, mw)
 			mw.Resize(fyne.NewSize(1000, 600))
 			mw.Show()

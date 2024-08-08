@@ -1,9 +1,11 @@
 package common
 
 import (
+	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +13,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/extrame/xls"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,7 +28,10 @@ type importTask struct {
 	state     string
 }
 
-func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(string, pb.ServiceClient, chan string)) {
+var ExePathTask string
+var ExePathPatchs string
+
+func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(string, pb.ServiceClient, chan string), flushChan chan struct{}) {
 	importWd := myapp.NewWindow("import")
 	input := widget.NewMultiLineEntry()
 	input.Resize(fyne.NewSize(600, 400))
@@ -46,30 +53,46 @@ func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(s
 		OnSubmit: func() {
 			output.SetText("")
 			paths := strings.Split(input.Text, "\n")
+			wg := sync.WaitGroup{}
 			for _, path := range paths {
+				wg.Add(1)
 				//去除粘贴过来时的引号
 				if strings.HasPrefix(path, "\"") && strings.HasSuffix(path, "\"") {
 					path = path[1 : len(path)-1]
 				}
-				go importFunc(path, client, outputChan)
+				go func() {
+					defer wg.Done()
+					importFunc(path, client, outputChan)
+				}()
 			}
 			go func() {
 				for res := range outputChan {
 					output.Append(res + "\n\r")
 				}
 			}()
+			wg.Wait()
+			flushChan <- struct{}{}
+
 		},
 		OnCancel: func() {
 			importWd.Close()
+			close(flushChan)
+			return
 		},
 	}
+	importWd.SetOnClosed(func() {
+		if _, ok := <-flushChan; ok {
+			close(flushChan)
+		}
+	})
 	importWd.SetContent(form)
 	importWd.Resize(fyne.NewSize(600, 400))
 	importWd.Show()
 }
 
 func ImportXLStoTaskListByPython(xlsFile string, client pb.ServiceClient, resChan chan string) {
-	cmd := exec.Command("D:\\Golang\\OrderManager-cli\\pytool\\read_xls_task.exe", xlsFile)
+	fmt.Println(os.Getwd())
+	cmd := exec.Command(ExePathTask, xlsFile)
 	//var out bytes.Buffer
 	//var stderr bytes.Buffer
 	//cmd.Stdout = &out
@@ -136,6 +159,7 @@ func ImportXLStoTaskListByPython(xlsFile string, client pb.ServiceClient, resCha
 		})
 		//fmt.Printf("id: %s, reqNo: %s, comment: %s, state: %s, principal: %s\n", task.taskId, task.reqNo, task.comment, task.state, task.principal)
 	}
+	req.User = config.LoginUser
 	_, err = client.ImportToTaskListTable(context.Background(), req)
 	if err != nil {
 		resChan <- fmt.Sprintf(err.Error())
@@ -206,7 +230,7 @@ func ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, resChan chan s
 }
 
 func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resChan chan string) {
-	cmd := exec.Command("D:\\Golang\\OrderManager-cli\\pytool\\read_xls.exe", xlsFile)
+	cmd := exec.Command(ExePathPatchs, xlsFile)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -245,6 +269,7 @@ func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resC
 		//fmt.Printf("Reading row %d: %+v\n", i, patch)
 
 		req.Patchs = append(req.Patchs, patch)
+		req.User = config.LoginUser
 	}
 	_, err = client.ImportXLSToPatchTable(context.Background(), &req)
 	if err != nil {

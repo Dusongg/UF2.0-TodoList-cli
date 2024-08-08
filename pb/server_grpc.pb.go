@@ -4,6 +4,8 @@
 // - protoc             v3.21.5
 // source: server.proto
 
+//protoc --go_out=./pb --go-grpc_out=./pb server.proto
+
 package pb
 
 import (
@@ -19,22 +21,146 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	Service_Login_FullMethodName                 = "/Service/Login"
-	Service_Register_FullMethodName              = "/Service/Register"
-	Service_GetTaskListAll_FullMethodName        = "/Service/GetTaskListAll"
-	Service_GetTaskListOne_FullMethodName        = "/Service/GetTaskListOne"
-	Service_ImportToTaskListTable_FullMethodName = "/Service/ImportToTaskListTable"
-	Service_DelTask_FullMethodName               = "/Service/DelTask"
-	Service_ModTask_FullMethodName               = "/Service/ModTask"
-	Service_AddTask_FullMethodName               = "/Service/AddTask"
-	Service_QueryTaskWithSQL_FullMethodName      = "/Service/QueryTaskWithSQL"
-	Service_QueryTaskWithField_FullMethodName    = "/Service/QueryTaskWithField"
-	Service_GetPatchsAll_FullMethodName          = "/Service/GetPatchsAll"
-	Service_GetOnePatchs_FullMethodName          = "/Service/GetOnePatchs"
-	Service_ModDeadLineInPatchs_FullMethodName   = "/Service/ModDeadLineInPatchs"
-	Service_DelPatch_FullMethodName              = "/Service/DelPatch"
-	Service_ImportXLSToPatchTable_FullMethodName = "/Service/ImportXLSToPatchTable"
-	Service_ModPatch_FullMethodName              = "/Service/ModPatch"
+	NotificationService_Subscribe_FullMethodName = "/notification.NotificationService/Subscribe"
+)
+
+// NotificationServiceClient is the client API for NotificationService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// 定义通知服务
+type NotificationServiceClient interface {
+	// 订阅更新，服务器端流式 RPC
+	Subscribe(ctx context.Context, in *SubscriptionRequest, opts ...grpc.CallOption) (NotificationService_SubscribeClient, error)
+}
+
+type notificationServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewNotificationServiceClient(cc grpc.ClientConnInterface) NotificationServiceClient {
+	return &notificationServiceClient{cc}
+}
+
+func (c *notificationServiceClient) Subscribe(ctx context.Context, in *SubscriptionRequest, opts ...grpc.CallOption) (NotificationService_SubscribeClient, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NotificationService_ServiceDesc.Streams[0], NotificationService_Subscribe_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &notificationServiceSubscribeClient{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type NotificationService_SubscribeClient interface {
+	Recv() (*Notification, error)
+	grpc.ClientStream
+}
+
+type notificationServiceSubscribeClient struct {
+	grpc.ClientStream
+}
+
+func (x *notificationServiceSubscribeClient) Recv() (*Notification, error) {
+	m := new(Notification)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// NotificationServiceServer is the server API for NotificationService service.
+// All implementations must embed UnimplementedNotificationServiceServer
+// for forward compatibility
+//
+// 定义通知服务
+type NotificationServiceServer interface {
+	// 订阅更新，服务器端流式 RPC
+	Subscribe(*SubscriptionRequest, NotificationService_SubscribeServer) error
+	mustEmbedUnimplementedNotificationServiceServer()
+}
+
+// UnimplementedNotificationServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedNotificationServiceServer struct {
+}
+
+func (UnimplementedNotificationServiceServer) Subscribe(*SubscriptionRequest, NotificationService_SubscribeServer) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
+}
+func (UnimplementedNotificationServiceServer) mustEmbedUnimplementedNotificationServiceServer() {}
+
+// UnsafeNotificationServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to NotificationServiceServer will
+// result in compilation errors.
+type UnsafeNotificationServiceServer interface {
+	mustEmbedUnimplementedNotificationServiceServer()
+}
+
+func RegisterNotificationServiceServer(s grpc.ServiceRegistrar, srv NotificationServiceServer) {
+	s.RegisterService(&NotificationService_ServiceDesc, srv)
+}
+
+func _NotificationService_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscriptionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NotificationServiceServer).Subscribe(m, &notificationServiceSubscribeServer{ServerStream: stream})
+}
+
+type NotificationService_SubscribeServer interface {
+	Send(*Notification) error
+	grpc.ServerStream
+}
+
+type notificationServiceSubscribeServer struct {
+	grpc.ServerStream
+}
+
+func (x *notificationServiceSubscribeServer) Send(m *Notification) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+// NotificationService_ServiceDesc is the grpc.ServiceDesc for NotificationService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var NotificationService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "notification.NotificationService",
+	HandlerType: (*NotificationServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Subscribe",
+			Handler:       _NotificationService_Subscribe_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "server.proto",
+}
+
+const (
+	Service_Login_FullMethodName                 = "/notification.Service/Login"
+	Service_Register_FullMethodName              = "/notification.Service/Register"
+	Service_GetTaskListAll_FullMethodName        = "/notification.Service/GetTaskListAll"
+	Service_GetTaskListOne_FullMethodName        = "/notification.Service/GetTaskListOne"
+	Service_ImportToTaskListTable_FullMethodName = "/notification.Service/ImportToTaskListTable"
+	Service_DelTask_FullMethodName               = "/notification.Service/DelTask"
+	Service_ModTask_FullMethodName               = "/notification.Service/ModTask"
+	Service_AddTask_FullMethodName               = "/notification.Service/AddTask"
+	Service_QueryTaskWithSQL_FullMethodName      = "/notification.Service/QueryTaskWithSQL"
+	Service_QueryTaskWithField_FullMethodName    = "/notification.Service/QueryTaskWithField"
+	Service_GetPatchsAll_FullMethodName          = "/notification.Service/GetPatchsAll"
+	Service_GetOnePatchs_FullMethodName          = "/notification.Service/GetOnePatchs"
+	Service_ModDeadLineInPatchs_FullMethodName   = "/notification.Service/ModDeadLineInPatchs"
+	Service_DelPatch_FullMethodName              = "/notification.Service/DelPatch"
+	Service_ImportXLSToPatchTable_FullMethodName = "/notification.Service/ImportXLSToPatchTable"
+	Service_ModPatch_FullMethodName              = "/notification.Service/ModPatch"
 )
 
 // ServiceClient is the client API for Service service.
@@ -617,7 +743,7 @@ func _Service_ModPatch_Handler(srv interface{}, ctx context.Context, dec func(in
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Service_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "Service",
+	ServiceName: "notification.Service",
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

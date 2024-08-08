@@ -2,6 +2,7 @@ package main
 
 import (
 	"OrderManager-cli/common"
+	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
 	"context"
 	"errors"
@@ -81,9 +82,17 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 		})
 
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		common.ImportController(myapp, client, common.ImportXLStoPatchTableByPython)
-		orderMap = loadAllPatchs(client, mw)
-		tree.Refresh()
+		flushChan := make(chan struct{})
+		common.ImportController(myapp, client, common.ImportXLStoPatchTableByPython, flushChan)
+		for {
+			_, ok := <-flushChan
+			if ok {
+				orderMap = loadAllPatchs(client, mw)
+				tree.Refresh()
+			} else {
+				break
+			}
+		}
 	})
 	searchEntry := widget.NewEntry()
 	searchBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
@@ -124,7 +133,7 @@ func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string 
 	keys := make([]string, 0)
 	for _, patch := range patchsData {
 		keys = append(keys, patch.PatchNo)
-		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], patch.ReqNo)
+		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], strings.Split(patch.ReqNo, ",")...)
 	}
 	for _, task := range tasksData {
 		orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
@@ -134,7 +143,7 @@ func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string 
 }
 
 // TODO: 该功能暂时只支持单个补丁查询
-// TODO: 问： 一个补丁对应一个需求在xls是在一行内还是在多行？  （当前：1补丁 -> 1需求 -> n任务）
+// TODO:一个补丁和多个需求对应关系在一行中，不同需求由“ , ”隔开，不同补丁可能对应相同需求
 func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) map[string][]string {
 	patchsReply, err := client.GetOnePatchs(context.Background(), &pb.GetOnePatchsRequest{PatchNo: patchNo})
 	if err != nil {
@@ -145,19 +154,20 @@ func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) ma
 	keys := make([]string, 0)
 	keys = append(keys, patchNo)
 
-	patchsDatas := patchsReply.Patchs
-	for _, patch := range patchsDatas {
-		tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: patch.ReqNo})
+	patchsData := patchsReply.P
+	reqNos := strings.Split(patchsData.ReqNo, ",")
+	for _, reqNo := range reqNos {
+		tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: reqNo})
 		if err != nil {
 			dialog.ShowError(err, mw)
 			return nil
 		}
 		tasksData := tasksReply.Tasks
 
-		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], patch.ReqNo)
+		orderMap[patchsData.PatchNo] = append(orderMap[patchsData.PatchNo], reqNo)
 
 		for _, task := range tasksData {
-			orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
+			orderMap[patchsData.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
 		}
 	}
 
@@ -165,6 +175,7 @@ func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) ma
 	return orderMap
 }
 
+// TODO:考虑查询到的第一个
 func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 	modTaskWindow := myapp.NewWindow("Update")
 
@@ -209,7 +220,7 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
 			if confirm {
-				_, err := client.DelPatch(context.Background(), &pb.DelPatchRequest{PatchNo: patchNoEty.Text})
+				_, err := client.DelPatch(context.Background(), &pb.DelPatchRequest{PatchNo: patchNoEty.Text, User: config.LoginUser})
 				if err != nil {
 					dialog.ShowError(err, modTaskWindow)
 					isSucceed <- -1
