@@ -12,9 +12,10 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
 	"github.com/extrame/xls"
-	"log"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -38,28 +39,30 @@ func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(s
 
 	output := widget.NewMultiLineEntry()
 	output.Resize(fyne.NewSize(600, 400))
-	outputChan := make(chan string)
+	outputChan := make(chan string, 100)
+	var once sync.Once
+
 	input.Validator = func(s string) error {
 		if s == "" {
 			return errors.New("can not be empty")
 		}
 		return nil
 	}
+	importActivity := widget.NewActivity()
+
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "input:", Widget: input},
 			{Text: "result", Widget: output},
+			{Text: "", Widget: importActivity},
 		},
 		OnSubmit: func() {
+			importActivity.Start()
 			output.SetText("")
 			paths := strings.Split(input.Text, "\n")
 			wg := sync.WaitGroup{}
-			for _, path := range paths {
+			processsXLS := func(path string) {
 				wg.Add(1)
-				//去除粘贴过来时的引号
-				if strings.HasPrefix(path, "\"") && strings.HasSuffix(path, "\"") {
-					path = path[1 : len(path)-1]
-				}
 				go func() {
 					defer wg.Done()
 					importFunc(path, client, outputChan)
@@ -70,20 +73,53 @@ func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(s
 					output.Append(res + "\n\r")
 				}
 			}()
-			wg.Wait()
-			flushChan <- struct{}{}
+			for _, path := range paths {
+				//TODO:windows下直接ctrl + shift + C 复制文件/文件夹路径带有“”
+				//TODO: 考虑一个文件夹里有规范化导出和补丁导出文件两种`
+				if strings.HasPrefix(path, "\"") && strings.HasSuffix(path, "\"") {
+					path = path[1 : len(path)-1]
+				}
+				info, err := os.Stat(path)
+				if err != nil {
+					outputChan <- fmt.Sprintf("<err>-><%s>:%s", path, err.Error())
+					continue
+				}
 
+				if info.IsDir() {
+					if err := filepath.Walk(info.Name(), func(path string, info fs.FileInfo, err error) error {
+						if err != nil {
+							return err
+						}
+						if !info.IsDir() {
+							processsXLS(path)
+						}
+						return nil
+					}); err != nil {
+						outputChan <- fmt.Sprintf("<err>-><%s>: %s", path, err.Error())
+					}
+				} else {
+					processsXLS(path)
+				}
+
+			}
+			wg.Wait()
+			importActivity.Stop()
+			flushChan <- struct{}{}
 		},
 		OnCancel: func() {
-			importWd.Close()
-			close(flushChan)
-			return
+			once.Do(func() {
+				importWd.Close()
+				close(outputChan)
+				close(flushChan)
+			})
 		},
 	}
 	importWd.SetOnClosed(func() {
-		if _, ok := <-flushChan; ok {
+		once.Do(func() {
+			importWd.Close()
+			close(outputChan)
 			close(flushChan)
-		}
+		})
 	})
 	importWd.SetContent(form)
 	importWd.Resize(fyne.NewSize(600, 400))
@@ -91,40 +127,36 @@ func ImportController(myapp fyne.App, client pb.ServiceClient, importFunc func(s
 }
 
 func ImportXLStoTaskListByPython(xlsFile string, client pb.ServiceClient, resChan chan string) {
-	fmt.Println(os.Getwd())
 	cmd := exec.Command(ExePathTask, xlsFile)
-	//var out bytes.Buffer
-	//var stderr bytes.Buffer
-	//cmd.Stdout = &out
-	//cmd.Stderr = &stderr
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil || stderr.Len() > 0 {
+		resChan <- fmt.Sprintf("<err> -> <%s>:cmd.Run() failed with %s: %s", xlsFile, err, stderr.String())
+		return
+	}
+
 	//
-	//err := cmd.Run()
+	//output, err := cmd.CombinedOutput()
 	//if err != nil {
-	//	resChan <- fmt.Errorf("cmd.Run() failed with %s: %s", err, stderr.String()).Error()
+	//	resChan <- fmt.Sprintf("Failed to execute command: %v", err)
 	//	return
 	//}
 	//
-	//if stderr.Len() > 0 {
-	//	resChan <- fmt.Sprintf("%s", stderr.String())
+	//outputStr := string(output)
+	//if cmd.ProcessState.ExitCode() != 0 {
+	//	resChan <- fmt.Sprintf("Python script error: %s\n", outputStr)
 	//	return
 	//}
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		resChan <- fmt.Sprintf("Failed to execute command: %v", err)
-		return
-	}
-
-	outputStr := string(output)
-	if cmd.ProcessState.ExitCode() != 0 {
-		resChan <- fmt.Sprintf("Python script error: %s\n", outputStr)
-		return
-	}
 
 	var result map[string][][]string
-	err = json.Unmarshal(output, &result)
+	err = json.Unmarshal(out.Bytes(), &result)
 	if err != nil {
-		log.Fatalf("Failed to parse JSON: %v", err)
+		resChan <- fmt.Sprintf("<err> -> <%s>:%s", xlsFile, err.Error())
+		return
 	}
 
 	//修改单信息
@@ -160,12 +192,12 @@ func ImportXLStoTaskListByPython(xlsFile string, client pb.ServiceClient, resCha
 		//fmt.Printf("id: %s, reqNo: %s, comment: %s, state: %s, principal: %s\n", task.taskId, task.reqNo, task.comment, task.state, task.principal)
 	}
 	req.User = config.LoginUser
-	_, err = client.ImportToTaskListTable(context.Background(), req)
+	_, err = client.ImportXLSToTaskTable(context.Background(), req)
 	if err != nil {
-		resChan <- fmt.Sprintf(err.Error())
+		resChan <- fmt.Sprintf("<err> -> <%s>:%s", xlsFile, stderr.String())
 		return
 	}
-	resChan <- fmt.Sprintf("%s import complete", xlsFile)
+	resChan <- fmt.Sprintf("<success> -> <%s>", xlsFile)
 	return
 }
 
@@ -173,7 +205,7 @@ func ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, resChan chan s
 	// 打开.xls文件
 	workbook, err := xls.Open(xlsFile, "utf-8")
 	if err != nil {
-		resChan <- fmt.Sprintf("err: %v", err)
+		resChan <- fmt.Sprintf("<err>-><%s>:%s", xlsFile, err.Error())
 		return
 	}
 
@@ -220,7 +252,7 @@ func ImportXLStoTaskList(xlsFile string, client pb.ServiceClient, resChan chan s
 		req.Tasks = append(req.Tasks, &pb.Task{TaskId: t.taskId, Comment: t.comment, Principal: t.principal, ReqNo: t.reqNo, State: t.state})
 	}
 
-	_, err = client.ImportToTaskListTable(context.Background(), &req)
+	_, err = client.ImportXLSToTaskTable(context.Background(), &req)
 	if err != nil {
 		resChan <- fmt.Sprintf(err.Error())
 		return
@@ -237,19 +269,15 @@ func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resC
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	if err != nil {
-		resChan <- fmt.Errorf("cmd.Run() failed with %s: %s", err, stderr.String()).Error()
+	if err != nil || stderr.Len() > 0 {
+		resChan <- fmt.Sprintf("<err> -> <%s>:cmd.Run() failed with %s: %s", xlsFile, err, stderr.String())
 		return
 	}
 
-	if stderr.Len() > 0 {
-		resChan <- fmt.Sprintf("%s", stderr.String())
-		return
-	}
 	var data [][]string
 	err = json.Unmarshal(out.Bytes(), &data)
 	if err != nil {
-		resChan <- err.Error()
+		resChan <- fmt.Sprintf("<err> -> <%s>:%s", xlsFile, err.Error())
 		return
 	}
 	req := pb.ImportXLSToPatchRequest{}
@@ -263,6 +291,7 @@ func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resC
 			Reason:     row[4],
 			Deadline:   t.Format("2006-01-02"),
 			Sponsor:    row[6],
+			State:      row[7],
 		}
 
 		//TODO: 最后一行读取错误问题
@@ -273,10 +302,10 @@ func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resC
 	}
 	_, err = client.ImportXLSToPatchTable(context.Background(), &req)
 	if err != nil {
-		resChan <- fmt.Sprintf(err.Error())
+		resChan <- fmt.Sprintf("<err> -> <%s>:%s", xlsFile, err.Error())
 		return
 	}
-	resChan <- fmt.Sprintf("%s import complete", xlsFile)
+	resChan <- fmt.Sprintf("<success> -> <%s>", xlsFile)
 	return
 
 }

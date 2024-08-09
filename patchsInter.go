@@ -6,6 +6,7 @@ import (
 	"OrderManager-cli/pb"
 	"context"
 	"errors"
+	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -62,7 +63,14 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			} else {
 				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = COLOR_REQ
 			}
-			o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(id)
+
+			//TODO
+			if toshow, ok := patchsInfoMap[id]; ok {
+				info := fmt.Sprintf("%s : <客户: %s -- 预计发布时间: %s -- 发布状态: %s>", id, toshow.clientName, toshow.deadline, toshow.state)
+				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(info)
+			} else {
+				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(id)
+			}
 			o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
 				if strings.HasPrefix(id, "P") { //补丁
 
@@ -78,7 +86,6 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 					}
 				}
 			}
-
 		})
 
 	importBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
@@ -100,7 +107,6 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			orderMap = loadAllPatchs(client, mw)
 			tree.Refresh()
 		} else {
-			log.Println(searchEntry.Text)
 			orderMap = loadQueryPatchs(searchEntry.Text, client, mw)
 			tree.Refresh()
 		}
@@ -108,12 +114,21 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		orderMap = loadAllPatchs(client, mw)
 		tree.Refresh()
+		tree.CloseAllBranches()
 	})
 	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
 	searchBar := container.NewStack(bg, container.NewBorder(nil, nil, importBtn, container.NewHBox(searchBtn, flushBtn), searchEntry))
 
 	return container.NewBorder(searchBar, nil, nil, nil, tree)
 }
+
+type treeInfo struct {
+	clientName string
+	deadline   string
+	state      string
+}
+
+var patchsInfoMap = make(map[string]treeInfo)
 
 func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string {
 	patchsReply, err := client.GetPatchsAll(context.Background(), &pb.GetPatchsAllRequest{})
@@ -132,6 +147,13 @@ func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string 
 	orderMap := make(map[string][]string)
 	keys := make([]string, 0)
 	for _, patch := range patchsData {
+
+		patchsInfoMap[patch.PatchNo] = treeInfo{
+			clientName: patch.ClientName,
+			deadline:   patch.Deadline,
+			state:      patch.State,
+		}
+
 		keys = append(keys, patch.PatchNo)
 		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], strings.Split(patch.ReqNo, ",")...)
 	}
@@ -184,14 +206,17 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 		dialog.ShowError(err, modTaskWindow)
 	}
 	patchs := reply.P
+	log.Println(reply.P.State)
 
-	patchNoEty, reqNoEty, describeEty, clientNameEty, deadlineEty, reasonEty, sponsorEty := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
+	patchNoEty, reqNoEty, describeEty, clientNameEty, deadlineEty, reasonEty, sponsorEty, stateEty := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
 	patchNoEty.SetText(patchs.PatchNo)
 	patchNoEty.Disable()
 	reqNoEty.SetText(patchs.ReqNo)
 	reqNoEty.Disable()
 	describeEty.SetText(patchs.Describe)
 	clientNameEty.SetText(patchs.ClientName)
+	stateEty.SetText(patchs.State)
+
 	clientNameEty.Validator = func(in string) error {
 		if in == "" {
 			return errors.New("client name is empty")
@@ -247,6 +272,7 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 			{Text: "客户名称", Widget: clientNameEty},
 			{Text: "问题描述", Widget: describeEty},
 			{Text: "补丁原因", Widget: reasonEty},
+			{Text: "发布状态", Widget: stateEty},
 			{Widget: delBtn},
 		},
 		OnSubmit: func() {
@@ -258,8 +284,10 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 				ClientName: clientNameEty.Text,
 				Reason:     reasonEty.Text,
 				Sponsor:    sponsorEty.Text,
+				State:      stateEty.Text,
 			}
-			_, err := client.ModPatch(context.Background(), &pb.ModPatchRequest{P: newPatch})
+			log.Println("cur user:", config.LoginUser)
+			_, err := client.ModPatch(context.Background(), &pb.ModPatchRequest{P: newPatch, User: config.LoginUser})
 			if err != nil {
 				isSucceed <- -1
 				log.Println(err)

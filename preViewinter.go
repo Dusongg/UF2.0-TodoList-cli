@@ -136,7 +136,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		dateLabel.TextStyle = fyne.TextStyle{Bold: true}
 		dateLabel.Color = color.White
 
-		viewGrid[d/5].Add(container.NewBorder(container.NewStack(bgTheme1, dateLabel), nil, nil, nil, list[d]))
+		viewGrid[d/DAYSPERPAGE].Add(container.NewBorder(container.NewStack(bgTheme1, dateLabel), nil, nil, nil, list[d]))
 	}
 
 	var topBtn *fyne.Container
@@ -186,8 +186,11 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		data, expired = loadTeamGrid(client, mw)
 		previewInterface.Refresh()
 	})
+	flushActivity := widget.NewActivity()
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		flushActivity.Start()
 		flushInterface()
+		flushActivity.Stop()
 	})
 	prevPageBtn := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
 		viewPage = max(viewPage-1, 0)
@@ -198,7 +201,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		updateCurViewGrid()
 	})
 
-	btnBar := container.NewBorder(nil, nil, container.NewHBox(addBtn, importBtn, flushBtn, teamBtn, accountBtnWithBg), container.NewHBox(prevPageBtn, nextPageBtn), container.NewStack(canvas.NewRectangle(colorTheme1), accountEty))
+	btnBar := container.NewBorder(nil, nil, container.NewHBox(addBtn, importBtn, flushBtn, flushActivity, teamBtn, accountBtnWithBg), container.NewHBox(prevPageBtn, nextPageBtn), container.NewStack(canvas.NewRectangle(colorTheme1), accountEty))
 	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
 	topBtn = container.NewStack(bg, btnBar)
 

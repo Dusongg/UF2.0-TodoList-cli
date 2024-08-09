@@ -28,7 +28,6 @@ def extract_data(file_path):
             'sheet3': data1,
             'sheet4': data2
         }
-
         return result
 
     except Exception as e:
@@ -38,13 +37,12 @@ def extract_data(file_path):
 
 
 if __name__ == "__main__":
-    # 从命令行参数获取文件路径
-    # if len(sys.argv) != 2:
-    #     print("Usage: python extract_data.py <file_path>", file=sys.stderr)
-    #     sys.exit(1)
-    #
-    # file_path = sys.argv[1]
-    data = extract_data("D:\\Golang\\OrderManager-cli\\xlsFile\\规范化导出文件.xls")
+    if len(sys.argv) != 2:
+        print("Usage: python extract_data.py <file_path>", file=sys.stderr)
+        sys.exit(1)
+
+    file_path = sys.argv[1]
+    data = extract_data(file_path)
 
     # 输出 JSON 格式的数据
     print(json.dumps(data, indent=2))

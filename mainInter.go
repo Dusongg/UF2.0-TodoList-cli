@@ -15,6 +15,7 @@ func showMainInterface(client pb.ServiceClient, mw fyne.Window) {
 		container.NewTabItemWithIcon("预览", theme.ListIcon(), previewInterface),
 		container.NewTabItemWithIcon("收件箱", theme.StorageIcon(), container.NewVScroll(widget.NewLabel("TODO"))),
 		container.NewTabItemWithIcon("补丁", theme.VisibilityIcon(), widget.NewLabel("TODO")),
+
 		//container.NewTabItem("库", widget.NewLabel("TODO")),
 	)
 	//default

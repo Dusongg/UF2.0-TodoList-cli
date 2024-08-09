@@ -5,6 +5,7 @@ go 1.22
 require (
 	fyne.io/fyne/v2 v2.5.0
 	github.com/extrame/xls v0.0.1
+	golang.org/x/crypto v0.23.0
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 )

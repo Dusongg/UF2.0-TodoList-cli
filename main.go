@@ -1,14 +1,21 @@
 //
 
 //2024.8.8
-//TODO: 1. 导入后直接刷新
-//TODO: 2. 导入补丁时补丁树的需求层没有分割逗号
-//TODO: 3. 优化登录界面
-//TODO: 4. 用工号登录后界面没有显示
-//TODO: 5. redis消息队列实现订阅发布模式
+//TODO: 1. 导入后直接刷新    √
+//TODO: 2. 导入补丁时补丁树的需求层没有分割逗号	√
+//TODO: 3. 优化登录界面: 记住密码与当前用户
+//TODO: 5. redis消息队列实现订阅发布模式   √
 //TODO: 6. 避免重复登录相同用户
-//TODO: 7. 考虑要不要做补丁过期自动删除
+//TODO: 7. 考虑要不要做补丁过期自动删除     （cancel）
 
+//2024.8.9
+//TODO 1. 补丁树增加信息  		√
+//TODO 2. 导入补丁后，将补丁下的任务deadline修改了    √
+//TODO 3. BUG:补丁重复导入补丁树的需求行会有空行   √
+
+// 2024.8.10
+// TODO: 1. 导入任务是否要将其关联的补丁同步deadline
+// TODO: 2. 日志库（客户端和服务端）
 package main
 
 // go build -ldflags="-H windowsgui"
@@ -104,6 +111,7 @@ func main() {
 					notification, err := stream.Recv()
 					if err != nil {
 						dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
+						return
 					}
 					dialog.ShowInformation("Information from others", fmt.Sprintf("Received notification: %s", notification.Message), mw)
 				}
