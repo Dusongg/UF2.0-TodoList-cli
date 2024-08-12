@@ -18,9 +18,9 @@
 // TODO: 2. 日志库（客户端和服务端）
 // TODO: 3. 权限设置  √
 // TODO: 4. 收件箱点击功能？
-// TODO: 5. 当前登录用户预览（邮箱，密码，用户身份）
+// TODO: 5. 当前登录用户预览（邮箱，密码，用户身份）   √
 // TODO: 6. 补丁里搜索客户和发布状态
-// TODO: 7. 测试删除用例
+// TODO: 7. 测试删除用例   √
 package main
 
 // go build -ldflags="-H windowsgui"

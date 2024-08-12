@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	userName string
-	passwd   string
+	prevUserName string
+	prevPasswd   string
 )
 
 func saveUserNameAndPass(user, pass string) {
@@ -70,8 +70,8 @@ func init() {
 	}
 
 	if len(lines) >= 2 {
-		userName = lines[0]
-		passwd = lines[1]
+		prevUserName = lines[0]
+		prevPasswd = lines[1]
 	} else {
 		fmt.Println("文件内容格式不正确 / 未读取到保存的密码与用户")
 	}
@@ -82,8 +82,8 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 	passwordEty := widget.NewPasswordEntry()
 
 	//
-	usernameEty.SetText(userName)
-	passwordEty.SetText(passwd)
+	usernameEty.SetText(prevUserName)
+	passwordEty.SetText(prevPasswd)
 	//
 	loginForm := widget.NewForm(
 		widget.NewFormItem("Username", usernameEty),
@@ -184,5 +184,82 @@ func showRegisterScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan 
 		registerButton,
 		backButton,
 	))
+
+}
+
+func personalView(client pb.ServiceClient) error {
+	personalWd := myapp.NewWindow("personal setting")
+	//
+	done := make(chan error, 1)
+	defer close(done)
+	reply, err := client.GetUserInfo(context.Background(), &pb.GetUserInfoRequest{UserName: config.LoginUser})
+	if err != nil {
+		return err
+	}
+
+	emailEty, groupEty, roleNoEty := widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
+	emailEty.SetText(reply.Email)
+	groupEty.SetText(strconv.Itoa(int(reply.Group)))
+	roleNoEty.SetText(strconv.Itoa(int(reply.RoleNo)))
+	passEty, confirmPassEty := widget.NewPasswordEntry(), widget.NewPasswordEntry()
+	confirmPassEty.Validator = func(s string) error {
+		if passEty.Text != "" && passEty.Text != confirmPassEty.Text {
+			return errors.New("confirm password error")
+		} else {
+			return nil
+		}
+	}
+	modPass := widget.NewCheck("修改密码", func(b bool) {
+	})
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{Text: "姓名", Widget: widget.NewLabel(config.LoginUser)},
+			{Text: "工号", Widget: widget.NewLabel(strconv.Itoa(int(reply.JobNO)))},
+			{Text: "邮箱", Widget: emailEty},
+			{Text: "小组", Widget: groupEty},
+			{Text: "角色", Widget: roleNoEty},
+			{Text: "", Widget: modPass},
+			{Text: "输入密码", Widget: passEty},
+			{Text: "确认密码", Widget: confirmPassEty},
+		},
+		OnSubmit: func() {
+			groupI, _ := strconv.Atoi(groupEty.Text)
+			roleI, _ := strconv.Atoi(roleNoEty.Text)
+			if modPass.Checked {
+				_, err := client.ModUserInfo(context.Background(), &pb.ModUserInfoRequest{
+					ModPass: true,
+					Pass:    passEty.Text,
+					Email:   emailEty.Text,
+					Group:   int32(groupI),
+					RoleNo:  int32(roleI),
+					Name:    config.LoginUser,
+				})
+				done <- err
+			} else {
+				_, err := client.ModUserInfo(context.Background(), &pb.ModUserInfoRequest{
+					ModPass: false,
+					Email:   emailEty.Text,
+					Group:   int32(groupI),
+					RoleNo:  int32(roleI),
+					Name:    config.LoginUser,
+				})
+				done <- err
+			}
+		},
+		OnCancel: func() {
+			done <- nil
+		},
+	}
+	personalWd.SetOnClosed(func() {
+		done <- nil
+	})
+
+	personalWd.SetContent(form)
+	personalWd.Resize(fyne.NewSize(300, 200))
+	personalWd.Show()
+
+	retErr := <-done
+	personalWd.Close()
+	return retErr
 
 }

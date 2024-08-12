@@ -144,8 +144,9 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	}
 
 	var topBtn *fyne.Container
+	var bottom *fyne.Container
 	updateCurViewGrid := func() {
-		appTab.Items[0].Content = container.NewBorder(topBtn, nil, nil, nil, viewGrid[viewPage])
+		appTab.Items[0].Content = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[viewPage])
 		appTab.Refresh()
 	}
 
@@ -210,9 +211,11 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	topBtn = container.NewStack(bg, btnBar)
 
 	personalBtn := widget.NewButtonWithIcon("", theme.AccountIcon(), func() {
-
+		if err := personalView(client); err != nil {
+			dialog.ShowError(err, mw)
+		}
 	})
-	bottom := container.NewHBox(layout.NewSpacer(), personalBtn)
+	bottom = container.NewHBox(layout.NewSpacer(), personalBtn)
 
 	previewInterface = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[0])
 	return previewInterface
@@ -253,9 +256,7 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 	}
 	task := tasks[0]
 
-	Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal := widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
-	Id.SetText(task.TaskId)
-	ReqNo.SetText(task.ReqNo)
+	Deadline, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal := widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
 	Deadline.SetText((*task).Deadline)
 	Deadline.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", Deadline.Text)
@@ -313,16 +314,6 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 		return nil
 	}
 
-	Id.Disable()    // 设置为只读
-	ReqNo.Disable() // 设置为只读
-	//Deadline.Disable()           // 设置为只读
-	//Comment.Disable()            // 设置为只读
-	//EmergencyLevel.Disable()     // 设置为只读
-	//EstimatedWorkHours.Disable() // 设置为只读
-	//State.Disable()              // 设置为只读
-	//Type.Disable()               // 设置为只读
-	//Principal.Disable()          // 设置为只读
-
 	// Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal
 	isSucceed := make(chan error)
 
@@ -341,10 +332,14 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 	})
 	delBtn.Importance = widget.HighImportance
 
+	idLabel := widget.NewLabel(task.TaskId)
+	idLabel.TextStyle = fyne.TextStyle{Bold: true}
+	reqNoLabel := widget.NewLabel(task.ReqNo)
+	reqNoLabel.TextStyle = fyne.TextStyle{Bold: true}
 	form := &widget.Form{
 		Items: []*widget.FormItem{
-			{Text: "任务单号", Widget: Id},
-			{Text: "需求号", Widget: ReqNo},
+			{Text: "任务单号", Widget: idLabel},
+			{Text: "需求号", Widget: reqNoLabel},
 			{Text: "截止日期", Widget: Deadline},
 			{Text: "负责人", Widget: Principal},
 			{Text: "预计工时(8h/d)", Widget: EstimatedWorkHours},

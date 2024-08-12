@@ -147,6 +147,8 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 const (
 	Service_Login_FullMethodName                 = "/notification.Service/Login"
 	Service_Register_FullMethodName              = "/notification.Service/Register"
+	Service_GetUserInfo_FullMethodName           = "/notification.Service/GetUserInfo"
+	Service_ModUserInfo_FullMethodName           = "/notification.Service/ModUserInfo"
 	Service_GetTaskListAll_FullMethodName        = "/notification.Service/GetTaskListAll"
 	Service_GetTaskListOne_FullMethodName        = "/notification.Service/GetTaskListOne"
 	Service_ImportXLSToTaskTable_FullMethodName  = "/notification.Service/ImportXLSToTaskTable"
@@ -170,6 +172,8 @@ const (
 type ServiceClient interface {
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginReply, error)
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error)
+	GetUserInfo(ctx context.Context, in *GetUserInfoRequest, opts ...grpc.CallOption) (*GetUserInfoReply, error)
+	ModUserInfo(ctx context.Context, in *ModUserInfoRequest, opts ...grpc.CallOption) (*ModUserInfoReply, error)
 	// 修改单/任务
 	GetTaskListAll(ctx context.Context, in *GetTaskListAllRequest, opts ...grpc.CallOption) (*GetTaskListAllReply, error)
 	GetTaskListOne(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error)
@@ -210,6 +214,26 @@ func (c *serviceClient) Register(ctx context.Context, in *RegisterRequest, opts 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterReply)
 	err := c.cc.Invoke(ctx, Service_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) GetUserInfo(ctx context.Context, in *GetUserInfoRequest, opts ...grpc.CallOption) (*GetUserInfoReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserInfoReply)
+	err := c.cc.Invoke(ctx, Service_GetUserInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) ModUserInfo(ctx context.Context, in *ModUserInfoRequest, opts ...grpc.CallOption) (*ModUserInfoReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ModUserInfoReply)
+	err := c.cc.Invoke(ctx, Service_ModUserInfo_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +378,8 @@ func (c *serviceClient) ModPatch(ctx context.Context, in *ModPatchRequest, opts 
 type ServiceServer interface {
 	Login(context.Context, *LoginRequest) (*LoginReply, error)
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
+	GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error)
+	ModUserInfo(context.Context, *ModUserInfoRequest) (*ModUserInfoReply, error)
 	// 修改单/任务
 	GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error)
 	GetTaskListOne(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error)
@@ -382,6 +408,12 @@ func (UnimplementedServiceServer) Login(context.Context, *LoginRequest) (*LoginR
 }
 func (UnimplementedServiceServer) Register(context.Context, *RegisterRequest) (*RegisterReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedServiceServer) GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserInfo not implemented")
+}
+func (UnimplementedServiceServer) ModUserInfo(context.Context, *ModUserInfoRequest) (*ModUserInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ModUserInfo not implemented")
 }
 func (UnimplementedServiceServer) GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTaskListAll not implemented")
@@ -467,6 +499,42 @@ func _Service_Register_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ServiceServer).Register(ctx, req.(*RegisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_GetUserInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).GetUserInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_GetUserInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).GetUserInfo(ctx, req.(*GetUserInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_ModUserInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ModUserInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).ModUserInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_ModUserInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).ModUserInfo(ctx, req.(*ModUserInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -719,6 +787,14 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Register",
 			Handler:    _Service_Register_Handler,
+		},
+		{
+			MethodName: "GetUserInfo",
+			Handler:    _Service_GetUserInfo_Handler,
+		},
+		{
+			MethodName: "ModUserInfo",
+			Handler:    _Service_ModUserInfo_Handler,
 		},
 		{
 			MethodName: "GetTaskListAll",
