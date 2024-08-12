@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"log"
 	"os"
@@ -91,7 +92,7 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 	rememberCheck := widget.NewCheck("Remember", func(checked bool) {})
 	rememberCheck.Checked = true
 
-	loginButton := widget.NewButton("Login", func() {
+	loginButton := widget.NewButtonWithIcon("Login", theme.LoginIcon(), func() {
 		user := usernameEty.Text
 		pass := passwordEty.Text
 		if user == "" || pass == "" {
@@ -118,7 +119,7 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 		}
 	})
 
-	registerButton := widget.NewButton("Register", func() {
+	registerButton := widget.NewButtonWithIcon("Register", theme.FolderNewIcon(), func() {
 		showRegisterScreen(client, loginWd, loginChan)
 	})
 

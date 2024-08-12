@@ -76,7 +76,6 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			}
 			o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
 				if strings.HasPrefix(id, "P") { //补丁
-
 					retNo := ModPatchsForm(id, client)
 					if retNo == 1 { //删除
 						delAndFlushTree(id)
@@ -261,16 +260,17 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
 			if confirm {
-				_, err := client.DelPatch(context.Background(), &pb.DelPatchRequest{PatchNo: patchNoEty.Text, User: config.LoginUser})
-				if err != nil {
-					dialog.ShowError(err, modTaskWindow)
-					isSucceed <- -1
-				} else {
-					isSucceed <- 1
-					modTaskWindow.Close()
-					return
-				}
-
+				go func() {
+					_, err := client.DelPatch(context.Background(), &pb.DelPatchRequest{PatchNo: patchNoEty.Text, User: config.LoginUser})
+					if err != nil {
+						dialog.ShowError(err, modTaskWindow)
+						isSucceed <- -1
+					} else {
+						isSucceed <- 1
+						modTaskWindow.Close()
+						return
+					}
+				}()
 			} else {
 				return
 			}

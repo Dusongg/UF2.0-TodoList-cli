@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"image/color"
@@ -208,7 +209,12 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
 	topBtn = container.NewStack(bg, btnBar)
 
-	previewInterface = container.NewBorder(topBtn, nil, nil, nil, viewGrid[0])
+	personalBtn := widget.NewButtonWithIcon("", theme.AccountIcon(), func() {
+
+	})
+	bottom := container.NewHBox(layout.NewSpacer(), personalBtn)
+
+	previewInterface = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[0])
 	return previewInterface
 }
 
@@ -323,14 +329,15 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
 			if confirm {
-				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.LoginUser, Principal: task.Principal})
-				isSucceed <- err
-
+				go func() {
+					_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.LoginUser, Principal: task.Principal})
+					isSucceed <- err
+					modTaskWindow.Close()
+				}()
 			} else {
 				return
 			}
 		}, modTaskWindow).Show()
-
 	})
 	delBtn.Importance = widget.HighImportance
 
