@@ -32,6 +32,7 @@ var taskColors = []color.Color{
 	color.RGBA{R: 111, G: 219, B: 161, A: 255},
 	color.RGBA{R: 242, G: 15, B: 98, A: 255},
 	color.RGBA{R: 240, G: 53, B: 9, A: 255},
+	color.RGBA{R: 240, G: 53, B: 9, A: 255},
 	color.RGBA{R: 247, G: 153, B: 174, A: 255},
 	color.RGBA{R: 79, G: 179, B: 129, A: 255},
 	color.RGBA{R: 180, G: 222, B: 180, A: 255},
@@ -84,8 +85,9 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 			item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = taskColors[colid%len(taskColors)]
 			item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(fmt.Sprintf("%s : %s", expired[id].TaskId, expired[id].Principal))
 			item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
-				succeed := ModForm(expired[id].TaskId, client)
-				if succeed {
+				if err := ModForm(expired[id].TaskId, client); err != nil {
+					dialog.ShowError(err, mw)
+				} else {
 					flushInterface()
 				}
 			}
@@ -120,8 +122,9 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 				item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[1].(*canvas.Rectangle).FillColor = taskColors[colid%len(taskColors)]
 				item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(fmt.Sprintf("%s : %s", data[d][id].TaskId, data[d][id].Principal))
 				item.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
-					succeed := ModForm(data[d][id].TaskId, client)
-					if succeed {
+					if err := ModForm(data[d][id].TaskId, client); err != nil {
+						dialog.ShowError(err, mw)
+					} else {
 						flushInterface()
 					}
 				}
@@ -228,7 +231,7 @@ func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
 	return weekday
 }
 
-func ModForm(taskId string, client pb.ServiceClient) bool {
+func ModForm(taskId string, client pb.ServiceClient) error {
 	modTaskWindow := myapp.NewWindow("Update")
 
 	reply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{
@@ -236,13 +239,11 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 		FieldValue: taskId,
 	})
 	if err != nil {
-		dialog.ShowError(err, modTaskWindow)
-		return false
+		return err
 	}
 	tasks := reply.Tasks
 	if tasks == nil || len(tasks) == 0 {
-		dialog.ShowError(errors.New("数据库中查询不到该id的任务 ："+taskId), modTaskWindow)
-		return false
+		return errors.New("数据库中查询不到该id的任务 ：" + taskId)
 	}
 	task := tasks[0]
 
@@ -317,22 +318,13 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 	//Principal.Disable()          // 设置为只读
 
 	// Id, Deadline, ReqNo, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal
-	isSucceed := make(chan bool)
+	isSucceed := make(chan error)
 
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
 			if confirm {
 				_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.LoginUser, Principal: task.Principal})
-				if err != nil {
-					log.Printf("error deleting task: %v", err)
-					dialog.ShowError(err, modTaskWindow)
-					isSucceed <- false
-					return
-				} else {
-					isSucceed <- true
-					modTaskWindow.Close()
-					return
-				}
+				isSucceed <- err
 
 			} else {
 				return
@@ -369,19 +361,10 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 				Principal:          Principal.Text,
 			}
 			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask, User: config.LoginUser})
-			if err != nil {
-				isSucceed <- false
-				log.Println(err)
-				return
-			} else {
-				isSucceed <- true
-				log.Println("update succeed")
-			}
-			modTaskWindow.Close()
+			isSucceed <- err
 		},
 		OnCancel: func() {
-			isSucceed <- false
-			modTaskWindow.Close()
+			isSucceed <- nil
 		},
 	}
 
@@ -390,9 +373,12 @@ func ModForm(taskId string, client pb.ServiceClient) bool {
 	modTaskWindow.Show()
 
 	modTaskWindow.SetOnClosed(func() {
-		isSucceed <- false
+		isSucceed <- nil
 	})
-	return <-isSucceed
+	ret := <-isSucceed
+	modTaskWindow.Close()
+
+	return ret
 }
 
 func addForm(client pb.ServiceClient) *pb.Task {
@@ -497,6 +483,7 @@ func loadTeamGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.T
 	for _, task := range reply.Tasks {
 		addData(task, &expired, data)
 	}
+	//log.Println("data dict size: " + strconv.Itoa(len(data)))
 	return data, expired
 }
 

@@ -65,8 +65,11 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			}
 
 			//TODO
-			if toshow, ok := patchsInfoMap[id]; ok {
-				info := fmt.Sprintf("%s : <客户: %s -- 预计发布时间: %s -- 发布状态: %s>", id, toshow.clientName, toshow.deadline, toshow.state)
+			if patchsShow, ok := patchsInfoMap[id]; ok {
+				info := fmt.Sprintf("%s : <客户: %s -- 预计发布时间: %s -- 发布状态: %s>", id, patchsShow.clientName, patchsShow.deadline, patchsShow.state)
+				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(info)
+			} else if taskShow, ok := tasksInfoMap[id]; ok {
+				info := fmt.Sprintf("%s : <负责人: %s -- 截止日期: %s -- 任务状态: %s>", id, taskShow.principal, taskShow.deadline, taskShow.state)
 				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(info)
 			} else {
 				o.(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*widget.Button).SetText(id)
@@ -80,7 +83,9 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 					}
 				} else if strings.HasPrefix(id, "T") { //任务/修改单
 
-					if ModForm(id, client) {
+					if err := ModForm(id, client); err != nil {
+						dialog.ShowError(err, mw)
+					} else {
 						orderMap = loadAllPatchs(client, mw)
 						tree.Refresh()
 					}
@@ -122,13 +127,19 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 	return container.NewBorder(searchBar, nil, nil, nil, tree)
 }
 
-type treeInfo struct {
+type treePatchInfo struct {
 	clientName string
 	deadline   string
 	state      string
 }
+type treeTaskInfo struct {
+	principal string
+	deadline  string
+	state     string
+}
 
-var patchsInfoMap = make(map[string]treeInfo)
+var patchsInfoMap = make(map[string]treePatchInfo)
+var tasksInfoMap = make(map[string]treeTaskInfo)
 
 func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string {
 	patchsReply, err := client.GetPatchsAll(context.Background(), &pb.GetPatchsAllRequest{})
@@ -148,7 +159,7 @@ func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string 
 	keys := make([]string, 0)
 	for _, patch := range patchsData {
 
-		patchsInfoMap[patch.PatchNo] = treeInfo{
+		patchsInfoMap[patch.PatchNo] = treePatchInfo{
 			clientName: patch.ClientName,
 			deadline:   patch.Deadline,
 			state:      patch.State,
@@ -158,6 +169,11 @@ func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string 
 		orderMap[patch.PatchNo] = append(orderMap[patch.PatchNo], strings.Split(patch.ReqNo, ",")...)
 	}
 	for _, task := range tasksData {
+		tasksInfoMap[task.TaskId] = treeTaskInfo{
+			principal: task.Principal,
+			deadline:  task.Deadline,
+			state:     task.State,
+		}
 		orderMap[task.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
 	}
 	orderMap[""] = keys
