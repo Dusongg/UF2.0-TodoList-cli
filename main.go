@@ -17,10 +17,14 @@
 // TODO: 1. 导入任务是否要将其关联的补丁同步deadline  √
 // TODO: 2. 日志库（客户端和服务端）
 // TODO: 3. 权限设置  √
-// TODO: 4. 收件箱点击功能？
+// TODO: 4. 收件箱点击功能？   √
 // TODO: 5. 当前登录用户预览（邮箱，密码，用户身份）   √
 // TODO: 6. 补丁里搜索客户和发布状态
 // TODO: 7. 测试删除用例   √
+
+// 2024.8.13 & 2024.8.14
+// TODO 1.将广播到客户端的消息改为收件箱模式
+// TODO 2.撰写帮助文档
 package main
 
 // go build -ldflags="-H windowsgui"
@@ -34,10 +38,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/dialog"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"image/color"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -50,12 +53,25 @@ var EmbeddedExePatchs []byte
 
 const DAYSPERPAGE = 5
 
-var colorTheme1 = color.RGBA{R: 57, G: 72, B: 94, A: 255}
-
 var myapp = app.New()
 
+// 计算订阅到的消息数量，即msgChan里面的消息数
+var msgCnt = 0
+
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	//log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	//logrus.SetOutput(&lumberjack.Logger{
+	//	Filename:   "./logs/app.log",
+	//	MaxSize:    100, // MB
+	//	MaxBackups: 30,
+	//	MaxAge:     0, // Disable age-based rotation
+	//	Compress:   true,
+	//})
+
+	//测试
+	logrus.SetOutput(os.Stdout)
+	logrus.SetFormatter(&logrus.JSONFormatter{})
 
 	tempDir, err := os.MkdirTemp("", "embedded_exe")
 	if err != nil {
@@ -92,9 +108,9 @@ func main() {
 	// 第二个参数是配置了一个证书，因为没有证书会报错，但是我们目前没有配置证书，所以需要insecure.NewCredentials()返回一个禁用传输安全的凭据
 	connect, err := grpc.NewClient(":8001", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	} else {
-		log.Println("connect success")
+		logrus.Info("connect success")
 	}
 	defer connect.Close()
 	client := pb.NewServiceClient(connect)
@@ -110,9 +126,10 @@ func main() {
 			notifyClient := pb.NewNotificationServiceClient(connect)
 			stream, err := notifyClient.Subscribe(context.Background(), &pb.SubscriptionRequest{ClientId: config.LoginUser})
 			if err != nil {
-				log.Fatalf("Failed to subscribe: %v", err)
+				logrus.Fatalf("Failed to subscribe: %v", err)
 			}
 
+			msgChan := make(chan string, 10)
 			go func() {
 				for {
 					notification, err := stream.Recv()
@@ -120,11 +137,11 @@ func main() {
 						dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
 						return
 					}
-					dialog.ShowInformation("Information from others", fmt.Sprintf("Received notification: %s", notification.Message), mw)
+					msgChan <- fmt.Sprintf(notification.Message)
 				}
 			}()
 
-			showMainInterface(client, mw)
+			showMainInterface(client, mw, msgChan)
 			mw.Resize(fyne.NewSize(1000, 600))
 			mw.Show()
 		} else {

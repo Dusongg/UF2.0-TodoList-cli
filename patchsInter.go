@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/sirupsen/logrus"
 	"image/color"
 	"log"
 	"strings"
@@ -105,23 +106,37 @@ func CreatePatchsInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasO
 			}
 		}
 	})
+	searchChoose := widget.NewSelect([]string{"补丁号", "发布状态", "客户名称"}, func(s string) {
+	})
+
 	searchEntry := widget.NewEntry()
+	activity := widget.NewActivity()
 	searchBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
+		activity.Start()
 		if searchEntry.Text == "" {
 			orderMap = loadAllPatchs(client, mw)
 			tree.Refresh()
 		} else {
-			orderMap = loadQueryPatchs(searchEntry.Text, client, mw)
+			switch searchChoose.SelectedIndex() {
+			case 0:
+				orderMap = loadQueryPatchs(searchEntry.Text, client, mw)
+			case 1:
+				orderMap = QueryPatchsWithField("state", searchEntry.Text, client, mw)
+			case 2:
+				orderMap = QueryPatchsWithField("client_name", searchEntry.Text, client, mw)
+			}
 			tree.Refresh()
+
 		}
+		activity.Stop()
 	})
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		orderMap = loadAllPatchs(client, mw)
 		tree.Refresh()
 		tree.CloseAllBranches()
 	})
-	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
-	searchBar := container.NewStack(bg, container.NewBorder(nil, nil, importBtn, container.NewHBox(searchBtn, flushBtn), searchEntry))
+	activity.Show()
+	searchBar := container.NewStack(config.BarBg, container.NewBorder(nil, nil, container.NewHBox(importBtn, searchChoose), container.NewHBox(searchBtn, activity, flushBtn), searchEntry))
 
 	return container.NewBorder(searchBar, nil, nil, nil, tree)
 }
@@ -181,6 +196,40 @@ func loadAllPatchs(client pb.ServiceClient, mw fyne.Window) map[string][]string 
 
 // TODO: 该功能暂时只支持单个补丁查询
 // TODO:一个补丁和多个需求对应关系在一行中，不同需求由“ , ”隔开，不同补丁可能对应相同需求
+func QueryPatchsWithField(fieldName string, fieldValue string, client pb.ServiceClient, mw fyne.Window) map[string][]string {
+	patchsReply, err := client.QueryPatchsWithField(context.Background(), &pb.QueryPatchsWithFieldRequest{FieldName: fieldName, FieldValue: fieldValue})
+	if err != nil {
+		dialog.ShowError(err, mw)
+		return nil
+	}
+	orderMap := make(map[string][]string)
+	keys := make([]string, 0)
+
+	patchsDatas := patchsReply.Ps
+	for _, patchsData := range patchsDatas {
+		keys = append(keys, patchsData.PatchNo)
+
+		reqNos := strings.Split(patchsData.ReqNo, ",")
+		for _, reqNo := range reqNos {
+			tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: reqNo})
+			if err != nil {
+				dialog.ShowError(err, mw)
+				return nil
+			}
+			tasksData := tasksReply.Tasks
+
+			orderMap[patchsData.PatchNo] = append(orderMap[patchsData.PatchNo], reqNo)
+
+			for _, task := range tasksData {
+				orderMap[patchsData.ReqNo] = append(orderMap[task.ReqNo], task.TaskId)
+			}
+		}
+	}
+
+	orderMap[""] = keys
+	return orderMap
+}
+
 func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) map[string][]string {
 	patchsReply, err := client.GetOnePatchs(context.Background(), &pb.GetOnePatchsRequest{PatchNo: patchNo})
 	if err != nil {
@@ -221,7 +270,6 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 		dialog.ShowError(err, modTaskWindow)
 	}
 	patchs := reply.P
-	log.Println(reply.P.State)
 
 	patchNoEty, reqNoEty, describeEty, clientNameEty, deadlineEty, reasonEty, sponsorEty, stateEty := widget.NewEntry(), widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
 	patchNoEty.SetText(patchs.PatchNo)
@@ -306,11 +354,11 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 			_, err := client.ModPatch(context.Background(), &pb.ModPatchRequest{P: newPatch, User: config.LoginUser})
 			if err != nil {
 				isSucceed <- -1
-				log.Println(err)
+				logrus.Warning(err)
 				return
 			} else {
 				isSucceed <- 0
-				log.Println("update succeed")
+				logrus.Infof("update patchs: %s succeed", newPatch.PatchNo)
 			}
 			modTaskWindow.Close()
 		},

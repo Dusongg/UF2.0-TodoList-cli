@@ -1,17 +1,15 @@
 package main
 
 import (
+	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
 	"context"
 	"fmt"
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"image/color"
-	"log"
 )
 
 func buildData(tasks []*pb.Task) [][]interface{} {
@@ -53,22 +51,29 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 			return len(tableData), len(tableData[0])
 		},
 		func() fyne.CanvasObject {
-			return widget.NewLabel("wide content")
+			return widget.NewButton("", nil)
 		},
 		func(i widget.TableCellID, o fyne.CanvasObject) {
 			if i.Row == 0 {
-				o.(*widget.Label).SetText(tableData[i.Row][i.Col].(string))
-				o.(*widget.Label).TextStyle.Bold = true
+				o.(*widget.Button).SetText(tableData[i.Row][i.Col].(string))
 			} else {
 				if v, ok := tableData[i.Row][i.Col].(string); ok {
-					o.(*widget.Label).SetText(v)
+					o.(*widget.Button).SetText(v)
 				} else {
-					o.(*widget.Label).SetText(fmt.Sprintf("%d", tableData[i.Row][i.Col]))
+					o.(*widget.Button).SetText(fmt.Sprintf("%d", tableData[i.Row][i.Col]))
+				}
+				o.(*widget.Button).OnTapped = func() {
+					if err := ModForm(tableData[i.Row][0].(string), client); err != nil {
+						dialog.ShowError(err, mw)
+					} else {
+						flushData(client, mw)
+					}
 				}
 			}
 		})
-	table.SetColumnWidth(0, 150)
-	table.SetColumnWidth(2, 150)
+	for i := 0; i < 9; i++ {
+		table.SetColumnWidth(i, 150)
+	}
 
 	searchEntry := widget.NewEntry()
 	searchChoose := widget.NewSelect([]string{"TaskId", "Principal", "ReqNo", "Deadline", "SQL"}, func(s string) {
@@ -98,11 +103,12 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 			dialog.ShowError(err, mw)
 			return
 		}
-		log.Println(len(rep.Tasks))
 		tableData = buildData(rep.Tasks)
 		table.Refresh()
 	}
+	activity := widget.NewActivity()
 	searchBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
+		activity.Start()
 		if searchEntry.Text == "" {
 			tableData = flushData(client, mw)
 			table.Refresh()
@@ -126,14 +132,14 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 			tableData = buildData(rep.Tasks)
 			table.Refresh()
 		}
+		activity.Stop()
 	})
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		searchBtn.SetText("")
 		tableData = flushData(client, mw)
 		table.Refresh()
 	})
-	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
-	searchBar := container.NewStack(bg, container.NewBorder(nil, nil, searchChoose, container.NewHBox(searchBtn, flushBtn), searchEntry))
+	searchBar := container.NewStack(config.BarBg, container.NewBorder(nil, nil, searchChoose, container.NewHBox(searchBtn, activity, flushBtn), searchEntry))
 
 	return container.NewBorder(searchBar, nil, nil, nil, table)
 }

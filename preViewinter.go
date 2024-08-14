@@ -14,8 +14,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/sirupsen/logrus"
 	"image/color"
-	"log"
 	"math"
 	"strconv"
 	"time"
@@ -38,10 +38,10 @@ var taskColors = []color.Color{
 	color.RGBA{R: 79, G: 179, B: 129, A: 255},
 	color.RGBA{R: 180, G: 222, B: 180, A: 255},
 	color.RGBA{G: 146, B: 199, A: 255},
-	color.RGBA{120, 94, 0, 255},
+	color.RGBA{R: 120, G: 94, A: 255},
 }
 
-func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, mw fyne.Window) *fyne.Container {
+func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, mw fyne.Window, msgChan <-chan string) *fyne.Container {
 
 	now := time.Now()
 	var previewInterface *fyne.Container
@@ -99,7 +99,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	// 设置Label的字体颜色
 	expiredLabel.TextStyle = fyne.TextStyle{Bold: true}
 	expiredLabel.Color = color.White
-	bgTheme1 := canvas.NewRectangle(colorTheme1)
+	bgTheme1 := canvas.NewRectangle(config.ColorTheme1)
 	viewGrid[0].Add(container.NewBorder(container.NewStack(bgTheme1, expiredLabel), nil, nil, nil, expiredList))
 
 	for d := 0; d < 31; d++ {
@@ -181,7 +181,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		}
 		previewInterface.Refresh()
 	})
-	accountBtnWithBg := container.NewStack(canvas.NewRectangle(colorTheme1), accountBtn)
+	accountBtnWithBg := container.NewStack(canvas.NewRectangle(config.ColorTheme1), accountBtn)
 
 	//accountBg := canvas.NewRectangle(colorTheme1)
 	//accountBox := container.NewStack(accountBg, container.NewHBox(accountBtn, accountEty, nil))
@@ -206,26 +206,72 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		updateCurViewGrid()
 	})
 
-	btnBar := container.NewBorder(nil, nil, container.NewHBox(addBtn, importBtn, flushBtn, flushActivity, teamBtn, accountBtnWithBg), container.NewHBox(prevPageBtn, nextPageBtn), container.NewStack(canvas.NewRectangle(colorTheme1), accountEty))
-	bg := canvas.NewRectangle(color.RGBA{R: 217, G: 213, B: 213, A: 255})
+	btnBar := container.NewBorder(
+		nil,
+		nil,
+		container.NewHBox(addBtn, importBtn, flushBtn, flushActivity, teamBtn, accountBtnWithBg),
+		nil,
+		container.NewStack(canvas.NewRectangle(config.ColorTheme1), accountEty))
+	bg := canvas.NewRectangle(color.RGBA{241, 241, 240, 255})
 	topBtn = container.NewStack(bg, btnBar)
 
-	personalBtn := widget.NewButtonWithIcon("", theme.AccountIcon(), func() {
+	personalBtn := widget.NewButtonWithIcon("", theme.ComputerIcon(), func() {
 		if err := personalView(client); err != nil {
 			dialog.ShowError(err, mw)
 		}
 	})
-	bottom = container.NewHBox(layout.NewSpacer(), personalBtn)
 
+	var msgStorage []string
+	msgActivity := widget.NewActivity()
+	msgCntLabel := widget.NewLabel(strconv.Itoa(msgCnt))
+	msgWd := myapp.NewWindow("msg")
+	msgWd.SetContent(widget.NewLabel("xx"))
+	msgWd.SetIcon(theme.MailComposeIcon())
+	msgWd.Resize(fyne.NewSize(450, 200))
+	closeWd := false
+	msgBtn := widget.NewButtonWithIcon("", theme.MailComposeIcon(), func() {
+		msgCnt = 0
+		msgCntLabel.SetText(fmt.Sprintf("%d", msgCnt))
+		msgActivity.Stop()
+		showMsg(msgStorage, msgWd, closeWd)
+		closeWd = !closeWd
+		//清除消息
+		msgStorage = msgStorage[:0]
+	})
+	go func() {
+		for msg := range msgChan {
+			msgActivity.Start()
+			msgCnt++
+			msgCntLabel.SetText(fmt.Sprintf("%d", msgCnt))
+			msgStorage = append(msgStorage, msg)
+		}
+	}()
+	msgBox := container.NewHBox(msgActivity, msgBtn, msgCntLabel)
+
+	bottom = container.NewStack(bg, container.NewHBox(personalBtn, layout.NewSpacer(), msgBox, layout.NewSpacer(), prevPageBtn, nextPageBtn))
 	previewInterface = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[0])
 	return previewInterface
+}
+
+func showMsg(messages []string, msgWd fyne.Window, CloseWd bool) {
+	if CloseWd {
+		msgWd.Hide()
+		return
+	}
+	msgBox := container.New(layout.NewVBoxLayout())
+	for _, msg := range messages {
+		msgBox.Add(widget.NewCard("", msg, nil))
+	}
+
+	msgWd.SetContent(msgBox)
+	msgWd.Show()
 }
 
 func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
 	now := time.Now()
 	taskDate, err := time.Parse("2006-01-02", t.Deadline)
 	if err != nil {
-		log.Printf("could not parse date: %v", err)
+		logrus.Warningf("could not parse date: %v", err)
 		return -1
 	}
 	weekday := int(taskDate.Sub(now.Truncate(24*time.Hour)).Hours() / 24) //任务时间距离现在有多少天
@@ -331,15 +377,21 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 		}, modTaskWindow).Show()
 	})
 	delBtn.Importance = widget.HighImportance
-
-	idLabel := widget.NewLabel(task.TaskId)
-	idLabel.TextStyle = fyne.TextStyle{Bold: true}
-	reqNoLabel := widget.NewLabel(task.ReqNo)
-	reqNoLabel.TextStyle = fyne.TextStyle{Bold: true}
+	//
+	//idLabel := widget.NewLabel(task.TaskId)
+	//idLabel.TextStyle = fyne.TextStyle{Bold: true}
+	//
+	//reqNoLabel := widget.NewLabel(task.ReqNo)
+	//reqNoLabel.TextStyle = fyne.TextStyle{Bold: true}
+	idEty, reqNoEty := widget.NewEntry(), widget.NewEntry()
+	idEty.SetText(task.TaskId)
+	idEty.Disable()
+	reqNoEty.SetText(task.ReqNo)
+	reqNoEty.Disable()
 	form := &widget.Form{
 		Items: []*widget.FormItem{
-			{Text: "任务单号", Widget: idLabel},
-			{Text: "需求号", Widget: reqNoLabel},
+			{Text: "任务单号", Widget: idEty},
+			{Text: "需求号", Widget: reqNoEty},
 			{Text: "截止日期", Widget: Deadline},
 			{Text: "负责人", Widget: Principal},
 			{Text: "预计工时(8h/d)", Widget: EstimatedWorkHours},

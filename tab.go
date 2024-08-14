@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func showMainInterface(client pb.ServiceClient, mw fyne.Window) {
+func showMainInterface(client pb.ServiceClient, mw fyne.Window, msgChan <-chan string) {
 
 	previewInterface := container.NewBorder(nil, nil, nil, nil, nil)
 	appTab := container.NewAppTabs(
@@ -19,7 +19,7 @@ func showMainInterface(client pb.ServiceClient, mw fyne.Window) {
 		//container.NewTabItem("库", widget.NewLabel("TODO")),
 	)
 	//default
-	previewInterface = CreatePreviewInterface(appTab, client, mw)
+	previewInterface = CreatePreviewInterface(appTab, client, mw, msgChan)
 	appTab.Items[0].Content = previewInterface
 
 	appTab.SetTabLocation(container.TabLocationLeading) //竖着的标签
