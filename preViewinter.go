@@ -221,29 +221,62 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		}
 	})
 
-	var msgStorage []string
+	hideWd := false
+	newMsgWdFunc := func() fyne.Window {
+		msgWd := myapp.NewWindow("msg")
+		msgWd.SetContent(widget.NewLabel("xx"))
+		msgWd.SetIcon(theme.MailComposeIcon())
+		msgWd.Resize(fyne.NewSize(450, 200))
+		msgWd.SetCloseIntercept(func() {
+			msgWd.Hide()
+			hideWd = false
+			return
+		})
+		return msgWd
+	}
+
 	msgActivity := widget.NewActivity()
 	msgCntLabel := widget.NewLabel(strconv.Itoa(msgCnt))
-	msgWd := myapp.NewWindow("msg")
-	msgWd.SetContent(widget.NewLabel("xx"))
-	msgWd.SetIcon(theme.MailComposeIcon())
-	msgWd.Resize(fyne.NewSize(450, 200))
-	closeWd := false
+	msgWd := newMsgWdFunc()
+	var msgData []string
+	msgList := widget.NewList(
+		func() int {
+			return len(msgData)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("template")
+		},
+		func(id widget.ListItemID, item fyne.CanvasObject) {
+			item.(*widget.Label).SetText(msgData[id])
+		},
+	)
+
+	msgWd.SetContent(msgList)
 	msgBtn := widget.NewButtonWithIcon("", theme.MailComposeIcon(), func() {
+		if hideWd {
+			msgWd.Hide()
+			hideWd = false
+			return
+		}
 		msgCnt = 0
 		msgCntLabel.SetText(fmt.Sprintf("%d", msgCnt))
 		msgActivity.Stop()
-		showMsg(msgStorage, msgWd, closeWd)
-		closeWd = !closeWd
+		msgWd.Show()
+		hideWd = !hideWd
 		//清除消息
-		msgStorage = msgStorage[:0]
 	})
+	//后台管理消息窗口
 	go func() {
 		for msg := range msgChan {
 			msgActivity.Start()
 			msgCnt++
-			msgCntLabel.SetText(fmt.Sprintf("%d", msgCnt))
-			msgStorage = append(msgStorage, msg)
+			if msgCnt >= 10 {
+				msgCntLabel.SetText("9+")
+			} else {
+				msgCntLabel.SetText(fmt.Sprintf("%d", msgCnt))
+
+			}
+			msgData = append([]string{msg}, msgData...)
 		}
 	}()
 	msgBox := container.NewHBox(msgActivity, msgBtn, msgCntLabel)
@@ -253,18 +286,8 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	return previewInterface
 }
 
-func showMsg(messages []string, msgWd fyne.Window, CloseWd bool) {
-	if CloseWd {
-		msgWd.Hide()
-		return
-	}
-	msgBox := container.New(layout.NewVBoxLayout())
-	for _, msg := range messages {
-		msgBox.Add(widget.NewCard("", msg, nil))
-	}
+func showMsg(msgWd fyne.Window, hideWd bool, msgChan <-chan string) {
 
-	msgWd.SetContent(msgBox)
-	msgWd.Show()
 }
 
 func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
