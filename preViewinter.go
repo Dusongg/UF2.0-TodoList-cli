@@ -53,12 +53,12 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		viewGrid[i] = container.NewGridWithRows(1)
 	}
 
-	data, expired := loadAccountGrid(client, mw, config.LoginUser)
+	data, expired := loadAccountGrid(client, mw, config.Cfg.Login.UserName)
 
 	flushInterface := func() {
 		switch curView {
 		case AccountView:
-			data, expired = loadAccountGrid(client, mw, config.LoginUser)
+			data, expired = loadAccountGrid(client, mw, config.Cfg.Login.UserName)
 			previewInterface.Refresh()
 		case TeamView:
 			data, expired = loadTeamGrid(client, mw)
@@ -177,7 +177,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 			//TODO:没有考虑用户是否存在
 			data, expired = loadAccountGrid(client, mw, accountEty.Text)
 		} else {
-			data, expired = loadAccountGrid(client, mw, config.LoginUser)
+			data, expired = loadAccountGrid(client, mw, config.Cfg.Login.UserName)
 		}
 		previewInterface.Refresh()
 	})
@@ -215,18 +215,19 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	bg := canvas.NewRectangle(color.RGBA{241, 241, 240, 255})
 	topBtn = container.NewStack(bg, btnBar)
 
-	personalBtn := widget.NewButtonWithIcon("", theme.ComputerIcon(), func() {
+	personalBtn := widget.NewButton(config.Cfg.Login.UserName, func() {
 		if err := personalView(client); err != nil {
 			dialog.ShowError(err, mw)
 		}
 	})
+	personalBtn.Importance = widget.HighImportance
 
 	hideWd := false
 	newMsgWdFunc := func() fyne.Window {
 		msgWd := myapp.NewWindow("msg")
 		msgWd.SetContent(widget.NewLabel("xx"))
 		msgWd.SetIcon(theme.MailComposeIcon())
-		msgWd.Resize(fyne.NewSize(450, 200))
+		msgWd.Resize(fyne.NewSize(550, 300))
 		msgWd.SetCloseIntercept(func() {
 			msgWd.Hide()
 			hideWd = false
@@ -387,17 +388,12 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 	isSucceed := make(chan error)
 
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
-		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
-			if confirm {
-				go func() {
-					_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.LoginUser, Principal: task.Principal})
-					isSucceed <- err
-					modTaskWindow.Close()
-				}()
-			} else {
-				return
-			}
-		}, modTaskWindow).Show()
+		go func() {
+			_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.Cfg.Login.UserName, Principal: task.Principal})
+			isSucceed <- err
+			modTaskWindow.Close()
+
+		}()
 	})
 	delBtn.Importance = widget.HighImportance
 	//
@@ -437,7 +433,7 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 				ReqNo:              task.ReqNo,
 				Principal:          Principal.Text,
 			}
-			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask, User: config.LoginUser})
+			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask, User: config.Cfg.Login.UserName})
 			isSucceed <- err
 		},
 		OnCancel: func() {
@@ -469,7 +465,7 @@ func addForm(client pb.ServiceClient) *pb.Task {
 	estimatedWorkHoursEty.SetText("24")
 	stateEty.SetText("带启动")
 	typeEty.SetText("0")
-	principalEty.SetText(config.LoginUser) //TODO: 默认登录者自己的名字，最后考虑权限的问题
+	principalEty.SetText(config.Cfg.Login.UserName) //TODO: 默认登录者自己的名字，最后考虑权限的问题
 
 	deadlineEty.Validator = func(in string) error {
 		_, err := time.Parse("2006-01-02", in)
@@ -524,7 +520,7 @@ func addForm(client pb.ServiceClient) *pb.Task {
 				Principal:          principalEty.Text,
 			}
 
-			_, err := client.AddTask(context.Background(), &pb.AddTaskRequest{T: newTask, User: config.LoginUser})
+			_, err := client.AddTask(context.Background(), &pb.AddTaskRequest{T: newTask, User: config.Cfg.Login.UserName})
 			if err != nil {
 				dialog.NewInformation("error", err.Error(), addTaskWindow).Show()
 			} else {

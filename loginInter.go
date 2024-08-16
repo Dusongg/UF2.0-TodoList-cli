@@ -3,78 +3,34 @@ package main
 import (
 	"OrderManager-cli/config"
 	"OrderManager-cli/pb"
-	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"log"
+	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
-	"strings"
 )
 
-var (
-	prevUserName string
-	prevPasswd   string
-)
-
-func saveUserNameAndPass(user, pass string) {
-	file, err := os.OpenFile(config.SaveUserInfoPath, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+func saveUserNameAndPass() {
+	file, err := os.OpenFile("./config/config.json", os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		log.Println("文件打开错误：", err)
+		logrus.Println("文件打开错误：", err)
 		return
 	}
 	defer file.Close()
-	_, err = file.WriteString(user + "\n" + pass)
+	data, _ := json.Marshal(config.Cfg)
+	_, err = file.Write(data)
 	if err != nil {
-		log.Println("无法写入文件:", err)
+		logrus.Println("无法写入文件:", err)
 		return
 	}
 
-}
-
-func init() {
-	if _, err := os.Stat(config.SaveUserInfoPath); os.IsNotExist(err) {
-		// 文件不存在，创建文件
-		file, err := os.Create(config.SaveUserInfoPath)
-		if err != nil {
-			log.Println("无法创建文件:", err)
-			return
-		}
-		defer file.Close()
-	}
-
-	file, err := os.Open(config.SaveUserInfoPath) //read only
-	if err != nil {
-		log.Println("无法打开文件:", err)
-		return
-	}
-	defer file.Close()
-
-	// 读取文件内容
-	scanner := bufio.NewScanner(file)
-	lines := []string{}
-	for scanner.Scan() {
-		lines = append(lines, strings.TrimSpace(scanner.Text()))
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Println("读取文件时出错:", err)
-		return
-	}
-
-	if len(lines) >= 2 {
-		prevUserName = lines[0]
-		prevPasswd = lines[1]
-	} else {
-		fmt.Println("文件内容格式不正确 / 未读取到保存的密码与用户")
-	}
 }
 
 func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan chan bool) {
@@ -82,8 +38,8 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 	passwordEty := widget.NewPasswordEntry()
 
 	//
-	usernameEty.SetText(prevUserName)
-	passwordEty.SetText(prevPasswd)
+	usernameEty.SetText(config.Cfg.Login.UserName)
+	passwordEty.SetText(config.Cfg.Login.Password)
 	//
 	loginForm := widget.NewForm(
 		widget.NewFormItem("Username", usernameEty),
@@ -108,12 +64,13 @@ func showLoginScreen(client pb.ServiceClient, loginWd fyne.Window, loginChan cha
 			dialog.ShowError(err, loginWd)
 			return
 		} else {
-			config.LoginUser = user
+			config.Cfg.Login.UserName = user
+			config.Cfg.Login.Password = pass
 			if rememberCheck.Checked {
 				// 在文件中写入默认的用户名和密码
-				go saveUserNameAndPass(user, pass)
+				go saveUserNameAndPass()
 			}
-			log.Printf("login success, user: %s\n", config.LoginUser)
+			logrus.Printf("login success, user: %s\n", config.Cfg.Login.UserName)
 			loginChan <- true
 			return
 		}
@@ -192,7 +149,7 @@ func personalView(client pb.ServiceClient) error {
 	//
 	done := make(chan error, 1)
 	defer close(done)
-	reply, err := client.GetUserInfo(context.Background(), &pb.GetUserInfoRequest{UserName: config.LoginUser})
+	reply, err := client.GetUserInfo(context.Background(), &pb.GetUserInfoRequest{UserName: config.Cfg.Login.UserName})
 	if err != nil {
 		return err
 	}
@@ -213,7 +170,7 @@ func personalView(client pb.ServiceClient) error {
 	})
 	form := &widget.Form{
 		Items: []*widget.FormItem{
-			{Text: "姓名", Widget: widget.NewLabel(config.LoginUser)},
+			{Text: "姓名", Widget: widget.NewLabel(config.Cfg.Login.UserName)},
 			{Text: "工号", Widget: widget.NewLabel(strconv.Itoa(int(reply.JobNO)))},
 			{Text: "邮箱", Widget: emailEty},
 			{Text: "小组", Widget: groupEty},
@@ -232,7 +189,7 @@ func personalView(client pb.ServiceClient) error {
 					Email:   emailEty.Text,
 					Group:   int32(groupI),
 					RoleNo:  int32(roleI),
-					Name:    config.LoginUser,
+					Name:    config.Cfg.Login.UserName,
 				})
 				done <- err
 			} else {
@@ -241,7 +198,7 @@ func personalView(client pb.ServiceClient) error {
 					Email:   emailEty.Text,
 					Group:   int32(groupI),
 					RoleNo:  int32(roleI),
-					Name:    config.LoginUser,
+					Name:    config.Cfg.Login.UserName,
 				})
 				done <- err
 			}

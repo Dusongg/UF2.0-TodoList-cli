@@ -22,9 +22,16 @@
 // TODO: 6. 补丁里搜索客户和发布状态
 // TODO: 7. 测试删除用例   √
 
-// 2024.8.13 & 2024.8.14
+// 2024.8.13 & 2024.8.14  & 2024.8.15
 // TODO 1.将广播到客户端的消息改为收件箱模式   √
-// TODO 2.撰写帮助文档
+// TODO 2.撰写帮助文档     40%
+// BUG: 删除任务时panic     √
+// TODO 3.界面显示用户名   √
+// TODO 4. 修改服务端的checklogin（重复了）    √
+
+// 2024.8.16
+// TODO 1. 考虑是否加redis缓存
+// TODO 2. 撤销操作
 package main
 
 // go build -ldflags="-H windowsgui"
@@ -101,12 +108,12 @@ func main() {
 	//}()
 
 	mw := myapp.NewWindow("Task List for the Week")
-	//月光石主题:深-》浅
+	mw.SetMaster()
 
 	// 建立一个链接，请求A服务
 	// 真实项目里肯定是通过配置中心拿服务名称，发给注册中心请求真实的A服务地址，这里都是模拟
 	// 第二个参数是配置了一个证书，因为没有证书会报错，但是我们目前没有配置证书，所以需要insecure.NewCredentials()返回一个禁用传输安全的凭据
-	connect, err := grpc.NewClient(":8001", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	connect, err := grpc.NewClient(fmt.Sprintf("%s:%s", config.Cfg.Conn.Host, config.Cfg.Conn.Port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logrus.Fatal(err)
 	} else {
@@ -124,7 +131,7 @@ func main() {
 		if isSuccess := <-loginChan; isSuccess {
 			loginWd.Hide()
 			notifyClient := pb.NewNotificationServiceClient(connect)
-			stream, err := notifyClient.Subscribe(context.Background(), &pb.SubscriptionRequest{ClientId: config.LoginUser})
+			stream, err := notifyClient.Subscribe(context.Background(), &pb.SubscriptionRequest{ClientId: config.Cfg.Login.UserName})
 			if err != nil {
 				logrus.Fatalf("Failed to subscribe: %v", err)
 			}
@@ -137,7 +144,7 @@ func main() {
 						dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
 						return
 					}
-					msgChan <- fmt.Sprintf(notification.Message)
+					msgChan <- notification.Message
 				}
 			}()
 
@@ -148,9 +155,7 @@ func main() {
 			myapp.Quit()
 		}
 	}()
-	mw.SetOnClosed(func() {
-		myapp.Quit()
-	})
+
 	myapp.Run()
 
 }

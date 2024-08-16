@@ -191,7 +191,7 @@ func ImportXLStoTaskListByPython(xlsFile string, client pb.ServiceClient, resCha
 		})
 		//fmt.Printf("id: %s, reqNo: %s, comment: %s, state: %s, principal: %s\n", task.taskId, task.reqNo, task.comment, task.state, task.principal)
 	}
-	req.User = config.LoginUser
+	req.User = config.Cfg.Login.UserName
 	_, err = client.ImportXLSToTaskTable(context.Background(), req)
 	if err != nil {
 		resChan <- fmt.Sprintf("<err> -> <%s>:%s", xlsFile, stderr.String())
@@ -298,7 +298,7 @@ func ImportXLStoPatchTableByPython(xlsFile string, client pb.ServiceClient, resC
 		//fmt.Printf("Reading row %d: %+v\n", i, patch)
 
 		req.Patchs = append(req.Patchs, patch)
-		req.User = config.LoginUser
+		req.User = config.Cfg.Login.UserName
 	}
 	_, err = client.ImportXLSToPatchTable(context.Background(), &req)
 	if err != nil {

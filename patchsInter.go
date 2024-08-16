@@ -15,7 +15,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/sirupsen/logrus"
 	"image/color"
-	"log"
 	"strings"
 	"time"
 )
@@ -306,23 +305,17 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 	isSucceed := make(chan int) //-1 : 失败， 0：update  1 ： delete
 
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
-		dialog.NewConfirm("Please Confirm", "Are you sure to delete", func(confirm bool) {
-			if confirm {
-				go func() {
-					_, err := client.DelPatch(context.Background(), &pb.DelPatchRequest{PatchNo: patchNoEty.Text, User: config.LoginUser})
-					if err != nil {
-						dialog.ShowError(err, modTaskWindow)
-						isSucceed <- -1
-					} else {
-						isSucceed <- 1
-						modTaskWindow.Close()
-						return
-					}
-				}()
+		go func() {
+			_, err := client.DelPatch(context.Background(), &pb.DelPatchRequest{PatchNo: patchNoEty.Text, User: config.Cfg.Login.UserName})
+			if err != nil {
+				dialog.ShowError(err, modTaskWindow)
+				isSucceed <- -1
 			} else {
+				isSucceed <- 1
+				modTaskWindow.Close()
 				return
 			}
-		}, modTaskWindow).Show()
+		}()
 
 	})
 	delBtn.Importance = widget.HighImportance
@@ -350,8 +343,7 @@ func ModPatchsForm(patchNo string, client pb.ServiceClient) int {
 				Sponsor:    sponsorEty.Text,
 				State:      stateEty.Text,
 			}
-			log.Println("cur user:", config.LoginUser)
-			_, err := client.ModPatch(context.Background(), &pb.ModPatchRequest{P: newPatch, User: config.LoginUser})
+			_, err := client.ModPatch(context.Background(), &pb.ModPatchRequest{P: newPatch, User: config.Cfg.Login.UserName})
 			if err != nil {
 				isSucceed <- -1
 				logrus.Warning(err)

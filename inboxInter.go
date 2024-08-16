@@ -14,7 +14,8 @@ import (
 
 func buildData(tasks []*pb.Task) [][]interface{} {
 	tableData := make([][]interface{}, 0)
-	tableData = append(tableData, []interface{}{"TaskId", "Principal", "ReqNo", "Deadline", "WorkHours", "Comment", "State", "Level", "TypeId"})
+	//tableData = append(tableData, []interface{}{"TaskId", "Principal", "ReqNo", "Deadline", "WorkHours", "Comment", "State", "Level", "TypeId"})
+	tableData = append(tableData, []interface{}{"任务号", "负责人", "需求号", "截止日期", "预计工时", "任务描述", "状态", "紧急程度", "任务类型"})
 	for _, task := range tasks {
 		tableData = append(tableData, []interface{}{task.TaskId, task.Principal, task.ReqNo, task.Deadline, task.EstimatedWorkHours, task.Comment, task.State, task.EmergencyLevel, task.TypeId})
 	}

@@ -145,6 +145,7 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	Service_SayHello_FullMethodName              = "/notification.Service/SayHello"
 	Service_Login_FullMethodName                 = "/notification.Service/Login"
 	Service_Register_FullMethodName              = "/notification.Service/Register"
 	Service_GetUserInfo_FullMethodName           = "/notification.Service/GetUserInfo"
@@ -171,6 +172,7 @@ const (
 //
 // 定义服务
 type ServiceClient interface {
+	SayHello(ctx context.Context, in *TestRequest, opts ...grpc.CallOption) (*TestReply, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginReply, error)
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error)
 	GetUserInfo(ctx context.Context, in *GetUserInfoRequest, opts ...grpc.CallOption) (*GetUserInfoReply, error)
@@ -200,6 +202,16 @@ type serviceClient struct {
 
 func NewServiceClient(cc grpc.ClientConnInterface) ServiceClient {
 	return &serviceClient{cc}
+}
+
+func (c *serviceClient) SayHello(ctx context.Context, in *TestRequest, opts ...grpc.CallOption) (*TestReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestReply)
+	err := c.cc.Invoke(ctx, Service_SayHello_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *serviceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginReply, error) {
@@ -388,6 +400,7 @@ func (c *serviceClient) ModPatch(ctx context.Context, in *ModPatchRequest, opts 
 //
 // 定义服务
 type ServiceServer interface {
+	SayHello(context.Context, *TestRequest) (*TestReply, error)
 	Login(context.Context, *LoginRequest) (*LoginReply, error)
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
 	GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error)
@@ -416,6 +429,9 @@ type ServiceServer interface {
 type UnimplementedServiceServer struct {
 }
 
+func (UnimplementedServiceServer) SayHello(context.Context, *TestRequest) (*TestReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
+}
 func (UnimplementedServiceServer) Login(context.Context, *LoginRequest) (*LoginReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
@@ -481,6 +497,24 @@ type UnsafeServiceServer interface {
 
 func RegisterServiceServer(s grpc.ServiceRegistrar, srv ServiceServer) {
 	s.RegisterService(&Service_ServiceDesc, srv)
+}
+
+func _Service_SayHello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).SayHello(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_SayHello_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).SayHello(ctx, req.(*TestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Service_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -814,6 +848,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "notification.Service",
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SayHello",
+			Handler:    _Service_SayHello_Handler,
+		},
 		{
 			MethodName: "Login",
 			Handler:    _Service_Login_Handler,
