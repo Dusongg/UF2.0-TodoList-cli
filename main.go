@@ -30,8 +30,8 @@
 // TODO 4. 修改服务端的checklogin（重复了）    √
 
 // 2024.8.16
-// TODO 1. 考虑是否加redis缓存
-// TODO 2. 撤销操作
+// TODO 1. 考虑是否加redis缓存   ❌
+// TODO 2. 撤销操作    √
 package main
 
 // go build -ldflags="-H windowsgui"
@@ -45,6 +45,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -127,6 +128,7 @@ func main() {
 	loginChan := make(chan bool)
 	loginWd := myapp.NewWindow("Login/Register")
 	loginWd.Resize(fyne.NewSize(500, 300))
+	loginWd.SetIcon(theme.AccountIcon())
 	go showLoginScreen(client, loginWd, loginChan)
 	loginWd.Show()
 	go func() {
