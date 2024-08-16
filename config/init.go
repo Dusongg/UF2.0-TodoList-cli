@@ -17,6 +17,8 @@ type Config struct {
 		UserName string `json:"username"`
 		Password string `json:"password"`
 	}
+	UndoLogTaskSize string `json:"undo_log_task_size"`
+	//UndoLogPatchsSize string `json:"undoLogTaskSize"`
 }
 
 func NewConfig(filePath string) *Config {

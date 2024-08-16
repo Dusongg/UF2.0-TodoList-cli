@@ -99,7 +99,7 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 
 	//sql语句查询, 或者输入字段查询
 	flushTableByField := func(fieldName string) {
-		rep, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: fieldName, FieldValue: searchEntry.Text})
+		rep, err := client.QueryTaskByField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: fieldName, FieldValue: searchEntry.Text})
 		if err != nil {
 			dialog.ShowError(err, mw)
 			return
@@ -125,7 +125,7 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 		case 3:
 			flushTableByField("deadline")
 		case 4:
-			rep, err := client.QueryTaskWithSQL(context.Background(), &pb.QueryTaskWithSQLRequest{Sql: searchEntry.Text})
+			rep, err := client.QueryTaskBySQL(context.Background(), &pb.QueryTaskWithSQLRequest{Sql: searchEntry.Text})
 			if err != nil {
 				dialog.ShowError(err, mw)
 				return

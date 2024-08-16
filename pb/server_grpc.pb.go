@@ -151,13 +151,14 @@ const (
 	Service_GetUserInfo_FullMethodName           = "/notification.Service/GetUserInfo"
 	Service_ModUserInfo_FullMethodName           = "/notification.Service/ModUserInfo"
 	Service_GetTaskListAll_FullMethodName        = "/notification.Service/GetTaskListAll"
-	Service_GetTaskListOne_FullMethodName        = "/notification.Service/GetTaskListOne"
+	Service_GetTaskListByName_FullMethodName     = "/notification.Service/GetTaskListByName"
+	Service_GetTaskById_FullMethodName           = "/notification.Service/GetTaskById"
 	Service_ImportXLSToTaskTable_FullMethodName  = "/notification.Service/ImportXLSToTaskTable"
 	Service_DelTask_FullMethodName               = "/notification.Service/DelTask"
 	Service_ModTask_FullMethodName               = "/notification.Service/ModTask"
 	Service_AddTask_FullMethodName               = "/notification.Service/AddTask"
-	Service_QueryTaskWithSQL_FullMethodName      = "/notification.Service/QueryTaskWithSQL"
-	Service_QueryTaskWithField_FullMethodName    = "/notification.Service/QueryTaskWithField"
+	Service_QueryTaskBySQL_FullMethodName        = "/notification.Service/QueryTaskBySQL"
+	Service_QueryTaskByField_FullMethodName      = "/notification.Service/QueryTaskByField"
 	Service_GetPatchsAll_FullMethodName          = "/notification.Service/GetPatchsAll"
 	Service_GetOnePatchs_FullMethodName          = "/notification.Service/GetOnePatchs"
 	Service_QueryPatchsWithField_FullMethodName  = "/notification.Service/QueryPatchsWithField"
@@ -179,14 +180,15 @@ type ServiceClient interface {
 	ModUserInfo(ctx context.Context, in *ModUserInfoRequest, opts ...grpc.CallOption) (*ModUserInfoReply, error)
 	// 修改单/任务
 	GetTaskListAll(ctx context.Context, in *GetTaskListAllRequest, opts ...grpc.CallOption) (*GetTaskListAllReply, error)
-	GetTaskListOne(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error)
+	GetTaskListByName(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error)
+	GetTaskById(ctx context.Context, in *GetTaskByIdRequest, opts ...grpc.CallOption) (*GetTaskByIdReply, error)
 	ImportXLSToTaskTable(ctx context.Context, in *ImportToTaskListRequest, opts ...grpc.CallOption) (*ImportToTaskListReply, error)
 	// CURD
 	DelTask(ctx context.Context, in *DelTaskRequest, opts ...grpc.CallOption) (*DelTaskReply, error)
 	ModTask(ctx context.Context, in *ModTaskRequest, opts ...grpc.CallOption) (*ModTaskReply, error)
 	AddTask(ctx context.Context, in *AddTaskRequest, opts ...grpc.CallOption) (*AddTaskReply, error)
-	QueryTaskWithSQL(ctx context.Context, in *QueryTaskWithSQLRequest, opts ...grpc.CallOption) (*QueryTaskWithSQLReply, error)
-	QueryTaskWithField(ctx context.Context, in *QueryTaskWithFieldRequest, opts ...grpc.CallOption) (*QueryTaskWithFieldReply, error)
+	QueryTaskBySQL(ctx context.Context, in *QueryTaskWithSQLRequest, opts ...grpc.CallOption) (*QueryTaskWithSQLReply, error)
+	QueryTaskByField(ctx context.Context, in *QueryTaskWithFieldRequest, opts ...grpc.CallOption) (*QueryTaskWithFieldReply, error)
 	// 补丁
 	GetPatchsAll(ctx context.Context, in *GetPatchsAllRequest, opts ...grpc.CallOption) (*GetPatchsAllReply, error)
 	GetOnePatchs(ctx context.Context, in *GetOnePatchsRequest, opts ...grpc.CallOption) (*GetOnePatchsReply, error)
@@ -264,10 +266,20 @@ func (c *serviceClient) GetTaskListAll(ctx context.Context, in *GetTaskListAllRe
 	return out, nil
 }
 
-func (c *serviceClient) GetTaskListOne(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error) {
+func (c *serviceClient) GetTaskListByName(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetTaskListOneReply)
-	err := c.cc.Invoke(ctx, Service_GetTaskListOne_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Service_GetTaskListByName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) GetTaskById(ctx context.Context, in *GetTaskByIdRequest, opts ...grpc.CallOption) (*GetTaskByIdReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTaskByIdReply)
+	err := c.cc.Invoke(ctx, Service_GetTaskById_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -314,20 +326,20 @@ func (c *serviceClient) AddTask(ctx context.Context, in *AddTaskRequest, opts ..
 	return out, nil
 }
 
-func (c *serviceClient) QueryTaskWithSQL(ctx context.Context, in *QueryTaskWithSQLRequest, opts ...grpc.CallOption) (*QueryTaskWithSQLReply, error) {
+func (c *serviceClient) QueryTaskBySQL(ctx context.Context, in *QueryTaskWithSQLRequest, opts ...grpc.CallOption) (*QueryTaskWithSQLReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(QueryTaskWithSQLReply)
-	err := c.cc.Invoke(ctx, Service_QueryTaskWithSQL_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Service_QueryTaskBySQL_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceClient) QueryTaskWithField(ctx context.Context, in *QueryTaskWithFieldRequest, opts ...grpc.CallOption) (*QueryTaskWithFieldReply, error) {
+func (c *serviceClient) QueryTaskByField(ctx context.Context, in *QueryTaskWithFieldRequest, opts ...grpc.CallOption) (*QueryTaskWithFieldReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(QueryTaskWithFieldReply)
-	err := c.cc.Invoke(ctx, Service_QueryTaskWithField_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Service_QueryTaskByField_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -407,14 +419,15 @@ type ServiceServer interface {
 	ModUserInfo(context.Context, *ModUserInfoRequest) (*ModUserInfoReply, error)
 	// 修改单/任务
 	GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error)
-	GetTaskListOne(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error)
+	GetTaskListByName(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error)
+	GetTaskById(context.Context, *GetTaskByIdRequest) (*GetTaskByIdReply, error)
 	ImportXLSToTaskTable(context.Context, *ImportToTaskListRequest) (*ImportToTaskListReply, error)
 	// CURD
 	DelTask(context.Context, *DelTaskRequest) (*DelTaskReply, error)
 	ModTask(context.Context, *ModTaskRequest) (*ModTaskReply, error)
 	AddTask(context.Context, *AddTaskRequest) (*AddTaskReply, error)
-	QueryTaskWithSQL(context.Context, *QueryTaskWithSQLRequest) (*QueryTaskWithSQLReply, error)
-	QueryTaskWithField(context.Context, *QueryTaskWithFieldRequest) (*QueryTaskWithFieldReply, error)
+	QueryTaskBySQL(context.Context, *QueryTaskWithSQLRequest) (*QueryTaskWithSQLReply, error)
+	QueryTaskByField(context.Context, *QueryTaskWithFieldRequest) (*QueryTaskWithFieldReply, error)
 	// 补丁
 	GetPatchsAll(context.Context, *GetPatchsAllRequest) (*GetPatchsAllReply, error)
 	GetOnePatchs(context.Context, *GetOnePatchsRequest) (*GetOnePatchsReply, error)
@@ -447,8 +460,11 @@ func (UnimplementedServiceServer) ModUserInfo(context.Context, *ModUserInfoReque
 func (UnimplementedServiceServer) GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTaskListAll not implemented")
 }
-func (UnimplementedServiceServer) GetTaskListOne(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetTaskListOne not implemented")
+func (UnimplementedServiceServer) GetTaskListByName(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTaskListByName not implemented")
+}
+func (UnimplementedServiceServer) GetTaskById(context.Context, *GetTaskByIdRequest) (*GetTaskByIdReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTaskById not implemented")
 }
 func (UnimplementedServiceServer) ImportXLSToTaskTable(context.Context, *ImportToTaskListRequest) (*ImportToTaskListReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ImportXLSToTaskTable not implemented")
@@ -462,11 +478,11 @@ func (UnimplementedServiceServer) ModTask(context.Context, *ModTaskRequest) (*Mo
 func (UnimplementedServiceServer) AddTask(context.Context, *AddTaskRequest) (*AddTaskReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddTask not implemented")
 }
-func (UnimplementedServiceServer) QueryTaskWithSQL(context.Context, *QueryTaskWithSQLRequest) (*QueryTaskWithSQLReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskWithSQL not implemented")
+func (UnimplementedServiceServer) QueryTaskBySQL(context.Context, *QueryTaskWithSQLRequest) (*QueryTaskWithSQLReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskBySQL not implemented")
 }
-func (UnimplementedServiceServer) QueryTaskWithField(context.Context, *QueryTaskWithFieldRequest) (*QueryTaskWithFieldReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskWithField not implemented")
+func (UnimplementedServiceServer) QueryTaskByField(context.Context, *QueryTaskWithFieldRequest) (*QueryTaskWithFieldReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskByField not implemented")
 }
 func (UnimplementedServiceServer) GetPatchsAll(context.Context, *GetPatchsAllRequest) (*GetPatchsAllReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPatchsAll not implemented")
@@ -607,20 +623,38 @@ func _Service_GetTaskListAll_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_GetTaskListOne_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_GetTaskListByName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetTaskListOneRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).GetTaskListOne(ctx, in)
+		return srv.(ServiceServer).GetTaskListByName(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_GetTaskListOne_FullMethodName,
+		FullMethod: Service_GetTaskListByName_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).GetTaskListOne(ctx, req.(*GetTaskListOneRequest))
+		return srv.(ServiceServer).GetTaskListByName(ctx, req.(*GetTaskListOneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_GetTaskById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTaskByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).GetTaskById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_GetTaskById_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).GetTaskById(ctx, req.(*GetTaskByIdRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -697,38 +731,38 @@ func _Service_AddTask_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_QueryTaskWithSQL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_QueryTaskBySQL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryTaskWithSQLRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).QueryTaskWithSQL(ctx, in)
+		return srv.(ServiceServer).QueryTaskBySQL(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_QueryTaskWithSQL_FullMethodName,
+		FullMethod: Service_QueryTaskBySQL_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).QueryTaskWithSQL(ctx, req.(*QueryTaskWithSQLRequest))
+		return srv.(ServiceServer).QueryTaskBySQL(ctx, req.(*QueryTaskWithSQLRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_QueryTaskWithField_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_QueryTaskByField_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryTaskWithFieldRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).QueryTaskWithField(ctx, in)
+		return srv.(ServiceServer).QueryTaskByField(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_QueryTaskWithField_FullMethodName,
+		FullMethod: Service_QueryTaskByField_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).QueryTaskWithField(ctx, req.(*QueryTaskWithFieldRequest))
+		return srv.(ServiceServer).QueryTaskByField(ctx, req.(*QueryTaskWithFieldRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -873,8 +907,12 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_GetTaskListAll_Handler,
 		},
 		{
-			MethodName: "GetTaskListOne",
-			Handler:    _Service_GetTaskListOne_Handler,
+			MethodName: "GetTaskListByName",
+			Handler:    _Service_GetTaskListByName_Handler,
+		},
+		{
+			MethodName: "GetTaskById",
+			Handler:    _Service_GetTaskById_Handler,
 		},
 		{
 			MethodName: "ImportXLSToTaskTable",
@@ -893,12 +931,12 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_AddTask_Handler,
 		},
 		{
-			MethodName: "QueryTaskWithSQL",
-			Handler:    _Service_QueryTaskWithSQL_Handler,
+			MethodName: "QueryTaskBySQL",
+			Handler:    _Service_QueryTaskBySQL_Handler,
 		},
 		{
-			MethodName: "QueryTaskWithField",
-			Handler:    _Service_QueryTaskWithField_Handler,
+			MethodName: "QueryTaskByField",
+			Handler:    _Service_QueryTaskByField_Handler,
 		},
 		{
 			MethodName: "GetPatchsAll",

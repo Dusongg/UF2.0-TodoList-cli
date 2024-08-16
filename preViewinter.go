@@ -280,15 +280,25 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 			msgData = append([]string{msg}, msgData...)
 		}
 	}()
-	msgBox := container.NewHBox(msgActivity, msgBtn, msgCntLabel)
+
+	undoBtn := widget.NewButtonWithIcon("", theme.ContentUndoIcon(), func() {
+		if err := logChain.undo(); err != nil {
+			dialog.ShowError(err, mw)
+		}
+		flushInterface()
+	})
+	redoBtn := widget.NewButtonWithIcon("", theme.ContentRedoIcon(), func() {
+		if err := logChain.redo(); err != nil {
+			dialog.ShowError(err, mw)
+		}
+		flushInterface()
+	})
+
+	msgBox := container.NewHBox(undoBtn, msgActivity, msgBtn, msgCntLabel, redoBtn)
 
 	bottom = container.NewStack(bg, container.NewHBox(personalBtn, layout.NewSpacer(), msgBox, layout.NewSpacer(), prevPageBtn, nextPageBtn))
 	previewInterface = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[0])
 	return previewInterface
-}
-
-func showMsg(msgWd fyne.Window, hideWd bool, msgChan <-chan string) {
-
 }
 
 func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
@@ -313,18 +323,13 @@ func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) int {
 func ModForm(taskId string, client pb.ServiceClient) error {
 	modTaskWindow := myapp.NewWindow("Update")
 
-	reply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{
-		Field:      "task_id",
-		FieldValue: taskId,
+	reply, err := client.GetTaskById(context.Background(), &pb.GetTaskByIdRequest{
+		TaskId: taskId,
 	})
 	if err != nil {
 		return err
 	}
-	tasks := reply.Tasks
-	if tasks == nil || len(tasks) == 0 {
-		return errors.New("数据库中查询不到该id的任务 ：" + taskId)
-	}
-	task := tasks[0]
+	task := reply.T
 
 	Deadline, Comment, EmergencyLevel, EstimatedWorkHours, State, Type, Principal := widget.NewEntry(), widget.NewMultiLineEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry(), widget.NewEntry()
 	Deadline.SetText((*task).Deadline)
@@ -390,6 +395,9 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
 		go func() {
 			_, err := client.DelTask(context.Background(), &pb.DelTaskRequest{TaskNo: task.TaskId, User: config.Cfg.Login.UserName, Principal: task.Principal})
+			if err == nil {
+				logChain.append("del", task, nil)
+			}
 			isSucceed <- err
 			modTaskWindow.Close()
 
@@ -434,6 +442,9 @@ func ModForm(taskId string, client pb.ServiceClient) error {
 				Principal:          Principal.Text,
 			}
 			_, err := client.ModTask(context.Background(), &pb.ModTaskRequest{T: newTask, User: config.Cfg.Login.UserName})
+			if err == nil {
+				logChain.append("update", task, newTask)
+			}
 			isSucceed <- err
 		},
 		OnCancel: func() {
@@ -520,10 +531,12 @@ func addForm(client pb.ServiceClient) *pb.Task {
 				Principal:          principalEty.Text,
 			}
 
-			_, err := client.AddTask(context.Background(), &pb.AddTaskRequest{T: newTask, User: config.Cfg.Login.UserName})
+			request := &pb.AddTaskRequest{T: newTask, User: config.Cfg.Login.UserName}
+			_, err := client.AddTask(context.Background(), request)
 			if err != nil {
 				dialog.NewInformation("error", err.Error(), addTaskWindow).Show()
 			} else {
+				logChain.append("add", nil, request)
 				retChan <- newTask
 				addTaskWindow.Close()
 			}
@@ -563,7 +576,7 @@ func loadTeamGrid(client pb.ServiceClient, mw fyne.Window) (data map[int][]*pb.T
 func loadAccountGrid(client pb.ServiceClient, mw fyne.Window, name string) (data map[int][]*pb.Task, expired []*pb.Task) {
 	data = make(map[int][]*pb.Task)
 	expired = make([]*pb.Task, 0)
-	reply, err := client.GetTaskListOne(context.Background(), &pb.GetTaskListOneRequest{Name: name})
+	reply, err := client.GetTaskListByName(context.Background(), &pb.GetTaskListOneRequest{Name: name})
 	if err != nil {
 		dialog.ShowError(err, mw)
 		return

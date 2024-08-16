@@ -24,7 +24,7 @@ func saveUserNameAndPass() {
 		return
 	}
 	defer file.Close()
-	data, _ := json.Marshal(config.Cfg)
+	data, _ := json.MarshalIndent(config.Cfg, "", "    ")
 	_, err = file.Write(data)
 	if err != nil {
 		logrus.Println("无法写入文件:", err)

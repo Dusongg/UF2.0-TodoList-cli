@@ -122,6 +122,8 @@ func main() {
 	defer connect.Close()
 	client := pb.NewServiceClient(connect)
 
+	logChain = NewLogChain(client)
+
 	loginChan := make(chan bool)
 	loginWd := myapp.NewWindow("Login/Register")
 	loginWd.Resize(fyne.NewSize(500, 300))

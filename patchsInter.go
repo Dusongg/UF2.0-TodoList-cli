@@ -210,7 +210,7 @@ func QueryPatchsWithField(fieldName string, fieldValue string, client pb.Service
 
 		reqNos := strings.Split(patchsData.ReqNo, ",")
 		for _, reqNo := range reqNos {
-			tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: reqNo})
+			tasksReply, err := client.QueryTaskByField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: reqNo})
 			if err != nil {
 				dialog.ShowError(err, mw)
 				return nil
@@ -242,7 +242,7 @@ func loadQueryPatchs(patchNo string, client pb.ServiceClient, mw fyne.Window) ma
 	patchsData := patchsReply.P
 	reqNos := strings.Split(patchsData.ReqNo, ",")
 	for _, reqNo := range reqNos {
-		tasksReply, err := client.QueryTaskWithField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: reqNo})
+		tasksReply, err := client.QueryTaskByField(context.Background(), &pb.QueryTaskWithFieldRequest{Field: "req_no", FieldValue: reqNo})
 		if err != nil {
 			dialog.ShowError(err, mw)
 			return nil
