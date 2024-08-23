@@ -42,7 +42,6 @@ var taskColors = []color.Color{
 }
 
 func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, mw fyne.Window, msgChan <-chan string) *fyne.Container {
-
 	now := time.Now()
 	var previewInterface *fyne.Container
 	curView := AccountView //0:个人， 1：团队
@@ -275,7 +274,6 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 				msgCntLabel.SetText("9+")
 			} else {
 				msgCntLabel.SetText(fmt.Sprintf("%d", msgCnt))
-
 			}
 			msgData = append([]string{msg}, msgData...)
 		}

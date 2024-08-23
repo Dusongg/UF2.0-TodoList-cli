@@ -32,6 +32,13 @@
 // 2024.8.16
 // TODO 1. 考虑是否加redis缓存   ❌
 // TODO 2. 撤销操作    √
+
+// 2024.8. 19
+// TODO 1. nginx   √
+// TODO 2. 离线用户接受消息    √
+
+// 2024.8.23
+// TODO 1. 分组显示
 package main
 
 // go build -ldflags="-H windowsgui"
@@ -51,6 +58,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 //go:embed pytool/read_xls_task.exe
@@ -134,21 +142,33 @@ func main() {
 	go func() {
 		if isSuccess := <-loginChan; isSuccess {
 			loginWd.Hide()
-			notifyClient := pb.NewNotificationServiceClient(connect)
-			stream, err := notifyClient.Subscribe(context.Background(), &pb.SubscriptionRequest{ClientId: config.Cfg.Login.UserName})
-			if err != nil {
-				logrus.Fatalf("Failed to subscribe: %v", err)
-			}
 
 			msgChan := make(chan string, 10)
 			go func() {
+				reconn := 0
 				for {
-					notification, err := stream.Recv()
-					if err != nil {
-						dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
+					if reconn == 12 {
 						return
 					}
-					msgChan <- notification.Message
+					notifyClient := pb.NewNotificationServiceClient(connect)
+
+					stream, err := notifyClient.Subscribe(context.Background(), &pb.SubscriptionRequest{ClientId: config.Cfg.Login.UserName})
+					if err != nil {
+						logrus.Errorf("Failed to subscribe: %v", err)
+						time.Sleep(5 * time.Second)
+						reconn++
+						continue
+					} else if reconn != 0 {
+						dialog.ShowInformation("reconnection successful", "grpc流链接重连成功，", mw)
+					}
+					for {
+						notification, err := stream.Recv()
+						if err != nil {
+							dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
+							break
+						}
+						msgChan <- notification.Message
+					}
 				}
 			}()
 
