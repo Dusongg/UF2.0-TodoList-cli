@@ -150,6 +150,7 @@ const (
 	Service_Register_FullMethodName              = "/notification.Service/Register"
 	Service_GetUserInfo_FullMethodName           = "/notification.Service/GetUserInfo"
 	Service_ModUserInfo_FullMethodName           = "/notification.Service/ModUserInfo"
+	Service_GetAllUserName_FullMethodName        = "/notification.Service/GetAllUserName"
 	Service_GetTaskListAll_FullMethodName        = "/notification.Service/GetTaskListAll"
 	Service_GetTaskListByName_FullMethodName     = "/notification.Service/GetTaskListByName"
 	Service_GetTaskById_FullMethodName           = "/notification.Service/GetTaskById"
@@ -178,6 +179,7 @@ type ServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error)
 	GetUserInfo(ctx context.Context, in *GetUserInfoRequest, opts ...grpc.CallOption) (*GetUserInfoReply, error)
 	ModUserInfo(ctx context.Context, in *ModUserInfoRequest, opts ...grpc.CallOption) (*ModUserInfoReply, error)
+	GetAllUserName(ctx context.Context, in *GetAllUserNameRequest, opts ...grpc.CallOption) (*GetAllUserNameReply, error)
 	// 修改单/任务
 	GetTaskListAll(ctx context.Context, in *GetTaskListAllRequest, opts ...grpc.CallOption) (*GetTaskListAllReply, error)
 	GetTaskListByName(ctx context.Context, in *GetTaskListOneRequest, opts ...grpc.CallOption) (*GetTaskListOneReply, error)
@@ -250,6 +252,16 @@ func (c *serviceClient) ModUserInfo(ctx context.Context, in *ModUserInfoRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ModUserInfoReply)
 	err := c.cc.Invoke(ctx, Service_ModUserInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) GetAllUserName(ctx context.Context, in *GetAllUserNameRequest, opts ...grpc.CallOption) (*GetAllUserNameReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAllUserNameReply)
+	err := c.cc.Invoke(ctx, Service_GetAllUserName_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -417,6 +429,7 @@ type ServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
 	GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error)
 	ModUserInfo(context.Context, *ModUserInfoRequest) (*ModUserInfoReply, error)
+	GetAllUserName(context.Context, *GetAllUserNameRequest) (*GetAllUserNameReply, error)
 	// 修改单/任务
 	GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error)
 	GetTaskListByName(context.Context, *GetTaskListOneRequest) (*GetTaskListOneReply, error)
@@ -456,6 +469,9 @@ func (UnimplementedServiceServer) GetUserInfo(context.Context, *GetUserInfoReque
 }
 func (UnimplementedServiceServer) ModUserInfo(context.Context, *ModUserInfoRequest) (*ModUserInfoReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ModUserInfo not implemented")
+}
+func (UnimplementedServiceServer) GetAllUserName(context.Context, *GetAllUserNameRequest) (*GetAllUserNameReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAllUserName not implemented")
 }
 func (UnimplementedServiceServer) GetTaskListAll(context.Context, *GetTaskListAllRequest) (*GetTaskListAllReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTaskListAll not implemented")
@@ -601,6 +617,24 @@ func _Service_ModUserInfo_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ServiceServer).ModUserInfo(ctx, req.(*ModUserInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_GetAllUserName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAllUserNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).GetAllUserName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_GetAllUserName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).GetAllUserName(ctx, req.(*GetAllUserNameRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -901,6 +935,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ModUserInfo",
 			Handler:    _Service_ModUserInfo_Handler,
+		},
+		{
+			MethodName: "GetAllUserName",
+			Handler:    _Service_GetAllUserName_Handler,
 		},
 		{
 			MethodName: "GetTaskListAll",

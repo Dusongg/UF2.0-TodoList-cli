@@ -1,7 +1,7 @@
 {
     "Conn": {
-        "host": "8.154.40.185",
-        "port": "8080"
+        "host": "localhost",
+        "port": "8001"
     },
     "Login": {
         "username": "dusong",
