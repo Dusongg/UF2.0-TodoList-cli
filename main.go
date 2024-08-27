@@ -173,6 +173,9 @@ func main() {
 							dialog.ShowError(fmt.Errorf("failed to receive notification: %v", err), mw)
 							break
 						}
+						if notification.Message == "ping" {
+							continue
+						}
 						msgChan <- notification.Message
 					}
 				}
