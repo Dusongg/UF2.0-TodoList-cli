@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/sirupsen/logrus"
 	"image/color"
+	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -62,24 +63,29 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 	data, expired := loadAccountGrid(client, mw, config.Cfg.Login.UserName)
 	var allData map[int][]*pb.Task
 	var allExpired []*pb.Task
+	var topBtn *fyne.Container
+	var bottom *fyne.Container
 	flushInterface := func() {
 		flushActivity.Start()
 		switch curView {
 		case AccountView:
+			appTab.Items[0].Content = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[accountViewPage])
+
 			data, expired = loadAccountGrid(client, mw, config.Cfg.Login.UserName)
 			//previewInterface = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[0])
 			previewInterface.Objects[2] = viewGrid[accountViewPage]
-			previewInterface.Refresh()
 		case TeamView:
 			allData, allExpired = loadTeamGrid(client, mw)
 			if len(allAccountNames) == 0 {
 				rep, _ := client.GetAllUserName(context.Background(), &pb.GetAllUserNameRequest{})
 				allAccountNames = rep.Names
 			}
+			//BUG:
+
 			teamGrid = createTeamGrid(allData, allExpired, mw)
-			previewInterface.Objects[2] = teamGrid[teamViewPage]
-			previewInterface.Refresh()
+			appTab.Items[0].Content = container.NewBorder(topBtn, bottom, nil, nil, teamGrid[teamViewPage])
 		}
+		appTab.Refresh()
 		flushActivity.Stop()
 	}
 	list := make(map[int]*widget.List, 31)
@@ -162,8 +168,6 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 
 	//TODO:team
 
-	var topBtn *fyne.Container
-	var bottom *fyne.Container
 	updateCurViewGrid := func() {
 		switch curView {
 		case AccountView:
@@ -216,7 +220,10 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 		curView = TeamView
 		allData, allExpired = loadTeamGrid(client, mw)
 		if len(allAccountNames) == 0 {
-			rep, _ := client.GetAllUserName(context.Background(), &pb.GetAllUserNameRequest{})
+			rep, err := client.GetAllUserName(context.Background(), &pb.GetAllUserNameRequest{})
+			if err != nil {
+				log.Fatal(err)
+			}
 			allAccountNames = rep.Names
 		}
 		teamGrid = createTeamGrid(allData, allExpired, mw)
@@ -340,7 +347,7 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 }
 
 func createTeamGrid(data map[int][]*pb.Task, expired []*pb.Task, mw fyne.Window) []fyne.CanvasObject {
-	// 0        expired d1 d2 d3
+	// 0        expired d1 d2 d3 d4 d5 ...
 	// dusong1
 	// dusong2
 	tables := make([]fyne.CanvasObject, 7) //5 * 7
@@ -358,13 +365,16 @@ func createTeamGrid(data map[int][]*pb.Task, expired []*pb.Task, mw fyne.Window)
 		grid[0][i+1] = time.Now().Add(time.Duration(i) * 24 * time.Hour).Format("2006-01-02")
 	}
 	for _, exp := range expired {
-		infoMap[(int64(nameMap[exp.Principal]+1)<<32)|1] = append(infoMap[int64(nameMap[exp.Principal]+1)<<32|1], exp.TaskId)
+		infoMap[(int64(nameMap[exp.Principal]+1)<<32)|0] = append(infoMap[int64(nameMap[exp.Principal]+1)<<32|0], exp.TaskId)
 	}
-	for day, tasks := range data {
+
+	for day, tasks := range data { //day有负数
+
 		for _, task := range tasks {
-			infoMap[(int64(nameMap[task.Principal]+1)<<32)|int64(day+2)] = append(infoMap[(int64(nameMap[task.Principal]+1)<<32)|int64(day+2)], task.TaskId)
+			infoMap[(int64(nameMap[task.Principal]+1)<<32)|int64(day+1)] = append(infoMap[(int64(nameMap[task.Principal]+1)<<32)|int64(day+1)], task.TaskId)
 		}
 	}
+
 	for i := 0; i < 7; i++ {
 		tmpGrid := make([][]string, len(allAccountNames)+1)
 		for j := range tmpGrid {
@@ -382,34 +392,35 @@ func createTeamGrid(data map[int][]*pb.Task, expired []*pb.Task, mw fyne.Window)
 				return len(tmpGrid), len(tmpGrid[0])
 			},
 			func() fyne.CanvasObject {
-				return container.NewPadded(widget.NewButton("", func() {}))
+				//BUG:
+				return widget.NewButton("", func() {})
 			},
 			func(id widget.TableCellID, obj fyne.CanvasObject) {
-				//tmpGrid : (n + 1) * 6
-				if value, exists := infoMap[(int64(id.Row)<<32)|int64(i*5+id.Col)]; exists {
+				btn := obj.(*widget.Button)
+				//TODO:dus重置按钮状态
+				btn.Hidden = false
+				btn.OnTapped = nil
+				btn.Importance = widget.LowImportance
+				//tmpGrid : (n + 1) * 6\
+				if id.Row == 0 || id.Col == 0 {
+					btn.SetText(tmpGrid[id.Row][id.Col])
+				} else if value, exists := infoMap[(int64(id.Row)<<32)|int64(i*5+id.Col-1)]; exists {
 					if len(value) > 1 {
-						obj.(*fyne.Container).Objects[0].(*widget.Button).SetText(value[0] + "+")
+						btn.SetText(value[0] + "+")
 					} else {
-						obj.(*fyne.Container).Objects[0].(*widget.Button).SetText(value[0])
+						btn.SetText(value[0])
 					}
-					//if i.Col == 1 {
-					//	return
-					//}
 
 					if len(value) > 1 {
-						obj.(*fyne.Container).Objects[0].(*widget.Button).Importance = widget.DangerImportance
+						btn.Importance = widget.DangerImportance
 					}
-					obj.(*fyne.Container).Objects[0].(*widget.Button).OnTapped = func() {
+					btn.OnTapped = func() {
 						dialog.ShowInformation("TaskInfo", strings.Join(value, "\r\n"), mw)
 					}
 				} else {
-					if id.Row > 0 && id.Col > 0 {
-						obj.(*fyne.Container).Objects[0].(*widget.Button).Hidden = true
-					} else {
-						obj.(*fyne.Container).Objects[0].(*widget.Button).SetText(tmpGrid[id.Row][id.Col])
-					}
+					btn.Hidden = true
 				}
-
+				btn.Refresh() // 强制刷新按钮
 			})
 		for k := 0; k < len(tmpGrid[0]); k++ {
 			table.SetColumnWidth(k, 150)
@@ -431,14 +442,14 @@ func addData(t *pb.Task, expired *[]*pb.Task, data map[int][]*pb.Task) {
 	if gap < 0 {
 		*expired = append(*expired, t)
 	} else {
-		workDay := int(math.Ceil(float64(t.EstimatedWorkHours) / 8.0)) //预计完成天数
+		workDay := int(math.Ceil(float64(t.EstimatedWorkHours) / 8.0)) //预计完成天数（上取整）
 		//fmt.Println(gap, workDay, t.TaskId)
 		if gap-workDay+1 < 0 {
 			for d := 0; d < workDay; d++ { //gap:2, workday:3
 				data[min(gap, d)] = append(data[min(gap, d)], t)
 			}
 		} else {
-			for d := gap - workDay; d <= gap; d++ {
+			for d := gap - workDay + 1; d <= gap; d++ {
 				data[d] = append(data[d], t)
 			}
 		}

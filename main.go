@@ -39,6 +39,12 @@
 
 // 2024.8.23
 // TODO 1. 分组显示
+
+//0224.8.27
+//TODO 1. 收件箱新增按姓名搜索
+//TODO 2. team修改排列顺序
+//TODO 3. account和team界面分离（尝试）
+
 package main
 
 // go build -ldflags="-H windowsgui"
