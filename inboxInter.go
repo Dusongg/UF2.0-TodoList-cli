@@ -77,18 +77,18 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 	}
 
 	searchEntry := widget.NewEntry()
-	searchChoose := widget.NewSelect([]string{"TaskId", "Principal", "ReqNo", "Deadline", "SQL"}, func(s string) {
+	searchChoose := widget.NewSelect([]string{"修改单号", "负责人", "需求号", "截止日期", "SQL"}, func(s string) {
 		switch s {
-		case "TaskId":
+		case "修改单号":
 			searchEntry.SetText("")
 			searchEntry.Refresh()
-		case "Principal":
+		case "负责人":
 			searchEntry.SetText("")
 			searchEntry.Refresh()
-		case "ReqNo":
+		case "需求号":
 			searchEntry.SetText("")
 			searchEntry.Refresh()
-		case "Deadline":
+		case "截止日期":
 			searchEntry.SetText("Usage: 2006-01-02")
 			searchEntry.Refresh()
 		case "SQL":
@@ -110,6 +110,7 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 	activity := widget.NewActivity()
 	searchBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
 		activity.Start()
+		defer activity.Stop()
 		if searchEntry.Text == "" {
 			tableData = flushData(client, mw)
 			table.Refresh()
@@ -133,7 +134,6 @@ func CreateInBoxInterface(client pb.ServiceClient, mw fyne.Window) fyne.CanvasOb
 			tableData = buildData(rep.Tasks)
 			table.Refresh()
 		}
-		activity.Stop()
 	})
 	flushBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		searchBtn.SetText("")

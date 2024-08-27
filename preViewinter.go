@@ -192,16 +192,20 @@ func CreatePreviewInterface(appTab *container.AppTabs, client pb.ServiceClient, 
 			}
 		}
 	})
+
 	accountEty := widget.NewEntry()
 	accountEty.PlaceHolder = "请输入姓名进行查询"
+	preSearch := ""
 	accountBtn := widget.NewButtonWithIcon("", theme.AccountIcon(), func() {
-		curView = AccountView
 		if accountEty.Text != "" {
+			preSearch = accountEty.Text
 			//TODO:没有考虑用户是否存在
 			data, expired = loadAccountGrid(client, mw, accountEty.Text)
-		} else {
+		} else if preSearch != "" { //防止重复刷新
+			preSearch = ""
 			data, expired = loadAccountGrid(client, mw, config.Cfg.Login.UserName)
 		}
+		curView = AccountView
 		appTab.Items[0].Content = container.NewBorder(topBtn, bottom, nil, nil, viewGrid[accountViewPage])
 		appTab.Refresh()
 
@@ -371,7 +375,11 @@ func tidyTeamGrid(data map[string]soredTV, expired []*pb.Task, mw fyne.Window) f
 		for j := 0; len(val) != 0 && j < 31; j++ { //日期   +2为grid表格
 			if val[0].deadPoint == j {
 				for val[0].deadPoint == j {
-					infoMap[(int64(i+1)<<32)|int64(j+2)] = append(infoMap[(int64(i+1)<<32)|int64(j+2)], fmt.Sprintf("%s (%d)", val[0].taskId, val[0].time))
+					if val[0].time > 8 {
+						infoMap[(int64(i+1)<<32)|int64(j+2)] = append(infoMap[(int64(i+1)<<32)|int64(j+2)], fmt.Sprintf("%s (%d)", val[0].taskId, val[0].time))
+					} else {
+						infoMap[(int64(i+1)<<32)|int64(j+2)] = append(infoMap[(int64(i+1)<<32)|int64(j+2)], val[0].taskId)
+					}
 					val = val[1:]
 					if len(val) == 0 {
 						break
@@ -412,11 +420,21 @@ func tidyTeamGrid(data map[string]soredTV, expired []*pb.Task, mw fyne.Window) f
 					btn.SetText(value[0])
 				}
 
-				if len(value) > 1 {
+				if len(value) > 1 || strings.HasSuffix(value[0], ")") {
 					btn.Importance = widget.DangerImportance
 				}
 				btn.OnTapped = func() {
-					dialog.ShowInformation("TaskInfo", strings.Join(value, "\r\n"), mw)
+					//dialog.ShowInformation("TaskInfo", strings.Join(value, "\r\n"), mw)
+					popupWindow := fyne.CurrentApp().NewWindow("tasklist window")
+					label := widget.NewLabel(strings.Join(value, "\r\n"))
+					copyBtn := widget.NewButton("Copy", func() {
+						clipboard := fyne.CurrentApp().Driver().AllWindows()[0].Clipboard()
+						clipboard.SetContent(label.Text)
+					})
+					popupContent := container.NewBorder(nil, copyBtn, nil, nil, label)
+					popupWindow.SetContent(popupContent)
+					popupWindow.Resize(fyne.NewSize(300, 150))
+					popupWindow.Show()
 				}
 			} else {
 				btn.Hidden = true
