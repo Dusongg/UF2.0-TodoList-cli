@@ -9,12 +9,12 @@
    ```json
    {
        "Conn": {
-           "host": "localhost",
-           "port": "8001"
+           "host": "8.154.40.185",
+           "port": "8080"
        },
        "Login": {
-           "username": "dusong",
-           "password": "123123"
+           "username": "your_name",
+           "password": "your_password"
        },
        "undo_log_task_size": "10"
    }
@@ -33,6 +33,12 @@
 ## 1.2 预览界面
 
 ![image-20240816164355646](https://typora-dusong.oss-cn-chengdu.aliyuncs.com/image-20240816164355646.png)
+
+- 所有人任务列表界面
+
+  以一天工作8h为例，做不完的任务会堆积到截止日期当天，点击按钮会显示当天的所有单号
+
+![image-20240828091943336](https://typora-dusong.oss-cn-chengdu.aliyuncs.com/image-20240828091943336.png)
 
 - 个人信息界面
 
